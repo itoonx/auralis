@@ -10,7 +10,8 @@
     "oracle": "bun run oracle-lite/server.ts",
     "persist": "tsx src/run-persist.ts",
     "values": "tsx src/run-values.ts",
-    "bench": "tsx src/bench.ts"
+    "bench": "tsx src/bench.ts",
+    "decisions": "tsx src/decisions.ts"
   },
   "keywords": [],
   "author": "",

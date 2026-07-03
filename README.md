@@ -69,6 +69,28 @@ territory, and the Conductor hands each one what its predecessors already found.
 **writing** — worktrees, clean merges, no lost work — is the adjacent problem it's built to grow into,
 not one it claims to have solved yet.
 
+## Decisions that live in the brain, not a folder that rots
+
+Most teams never keep Architecture Decision Records up to date — you write one, nobody reads it, and it
+goes stale in `git`. auralis records a decision *into the shared brain* (via a `decide` tool), so the
+next agent that touches that area **searches and finds it** right when it's about to change something.
+
+And it's an **honest** ADR by construction — it nails the two things agents usually fake:
+
+- **The road not taken** is kept — the alternatives that were rejected, and why (the most valuable and
+  most-often-lost part of any decision).
+- **What the agent can't see** is handed to a human — external constraints like deadlines, licensing,
+  team skills, and lock-in are left explicitly for a person to fill, rather than dressed up as clean
+  technical reasons. It's honest about its blind spots instead of pretending it knows.
+
+Because the brain is **append-only with supersession**, a reversed decision is never deleted — it's
+superseded ("reversed because …"), so a future agent finds both the original call *and* its reversal.
+That's what a static `.md` can't do — and why hand-kept ADRs rot.
+
+```bash
+pnpm decisions   # print the honest ADR log straight from the brain
+```
+
 ## What it can do — proven on live runs
 
 Every claim below was measured on real Claude Code runs (over auralis's own codebase), not asserted.
@@ -154,6 +176,7 @@ AURALIS_TRIALS=3 AURALIS_TASKS=benchmarks/core.json AURALIS_PROJECT_DIR=/path/to
 | `src/participants.ts` | Worker, MemoryLibrarian, Sentry, Auditor |
 | `src/runner.ts` | drive Claude Code (or a deterministic stub for tests) |
 | `src/audit.ts` | turn a run's provenance into a plain-language "why" |
+| `src/decision.ts` | honest ADRs recorded into the brain — kept & superseded, never deleted |
 | `src/run.ts` · `run-persist.ts` · `run-values.ts` | the three live demos |
 
 ## Honest notes

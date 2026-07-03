@@ -39,7 +39,7 @@ export class ClaudeCodeRunner implements AgentRunner {
     };
     if (this.opts.brain) {
       options.mcpServers = { oracle: this.opts.brain };
-      options.allowedTools = [...options.allowedTools, "mcp__oracle__search", "mcp__oracle__learn"];
+      options.allowedTools = [...options.allowedTools, "mcp__oracle__search", "mcp__oracle__learn", "mcp__oracle__decide"];
     }
     try {
       for await (const m of query({ prompt, options })) {
