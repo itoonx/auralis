@@ -22,8 +22,9 @@ db.run(`CREATE TABLE IF NOT EXISTS docs (
   superseded_by TEXT, superseded_at TEXT, superseded_reason TEXT
 );`);
 db.run(`CREATE VIRTUAL TABLE IF NOT EXISTS docs_fts USING fts5(id UNINDEXED, content, concepts);`);
+try { db.run("ALTER TABLE docs ADD COLUMN tier TEXT DEFAULT 'raw';"); } catch { /* column already exists */ }
 
-const insDoc = db.query("INSERT INTO docs (id, content, concepts, project, source, created_at) VALUES (?, ?, ?, ?, ?, ?)");
+const insDoc = db.query("INSERT INTO docs (id, content, concepts, project, source, created_at, tier) VALUES (?, ?, ?, ?, ?, ?, ?)");
 const insFts = db.query("INSERT INTO docs_fts (id, content, concepts) VALUES (?, ?, ?)");
 const supersedeStmt = db.query("UPDATE docs SET superseded_by = ?, superseded_at = ?, superseded_reason = ? WHERE id = ?");
 const countStmt = db.query("SELECT COUNT(*) AS c FROM docs");
@@ -175,7 +176,7 @@ const server = Bun.serve({
       if (!pattern) return Response.json({ error: "pattern is required" }, { status: 400 });
       const id = idFrom(pattern);
       const concepts = Array.isArray(body?.concepts) ? body.concepts.join(" ") : "";
-      insDoc.run(id, pattern, concepts, body?.project ?? null, body?.source ?? "auralis", new Date().toISOString());
+      insDoc.run(id, pattern, concepts, body?.project ?? null, body?.source ?? "auralis", new Date().toISOString(), body?.tier === "distilled" ? "distilled" : "raw");
       insFts.run(id, pattern, concepts); // synchronous -> immediately searchable
       await vectorAdd(id, pattern);
       return Response.json({ success: true, id, embedding: vectorsOn ? embedder : "fts-only" });
@@ -198,6 +199,19 @@ const server = Bun.serve({
       return Response.json({ success: true, reset: true });
     }
 
+    if (req.method === "GET" && url.pathname === "/api/docs") {
+      const tier = url.searchParams.get("tier");
+      const project = url.searchParams.get("project");
+      const max = Math.max(1, Math.min(500, Number(url.searchParams.get("max") ?? 200)));
+      let sql = "SELECT id, content, tier FROM docs WHERE superseded_by IS NULL";
+      const params: any[] = [];
+      if (tier) { sql += " AND tier = ?"; params.push(tier); }
+      if (project) { sql += " AND project = ?"; params.push(project); }
+      sql += " LIMIT ?"; params.push(max);
+      const rows = db.query(sql).all(...params) as any[];
+      return Response.json({ docs: rows.map((r) => ({ id: r.id, content: r.content, tier: r.tier ?? "raw" })) });
+    }
+
     if (req.method === "GET" && url.pathname === "/api/search") {
       const q = url.searchParams.get("q") ?? "";
       const limit = Math.max(1, Math.min(50, Number(url.searchParams.get("limit") ?? 5)));
@@ -210,13 +224,13 @@ const server = Bun.serve({
       for (const r of ftsRows) {
         const ftsScore = 1 / (1 + Math.max(0, Number(r.rank)));
         const v = vScores.get(String(r.id)) ?? 0;
-        const score = (0.5 * ftsScore + 0.5 * v) * (v > 0 ? 1.1 : 1);
+        const score = (0.5 * ftsScore + 0.5 * v) * (v > 0 ? 1.1 : 1) * (r.superseded_by ? 0.3 : 1);
         merged.set(String(r.id), { id: r.id, content: r.content, source: r.source, superseded_by: r.superseded_by, score });
       }
       for (const [id, v] of vScores) {
         if (merged.has(id)) continue;
         const d = getDocStmt.get(id) as any;
-        if (d) merged.set(id, { id, content: d.content, source: d.source ?? "vector", superseded_by: d.superseded_by, score: 0.5 * v });
+        if (d) merged.set(id, { id, content: d.content, source: d.source ?? "vector", superseded_by: d.superseded_by, score: 0.5 * v * (d.superseded_by ? 0.3 : 1) });
       }
 
       const results = [...merged.values()]

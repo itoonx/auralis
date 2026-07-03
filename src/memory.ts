@@ -13,7 +13,8 @@ export interface SearchHit {
 
 export interface MemoryAdapter {
   search(query: string, opts?: { limit?: number; project?: string }): Promise<SearchHit[]>;
-  learn(pattern: string, opts?: { concepts?: string[]; project?: string; source?: string }): Promise<{ id: string }>;
+  learn(pattern: string, opts?: { concepts?: string[]; project?: string; source?: string; tier?: "raw" | "distilled" }): Promise<{ id: string }>;
+  listDocs?(opts?: { tier?: string; project?: string; max?: number }): Promise<{ id: string; content: string; tier?: string }[]>;
   supersede?(oldId: string, newId: string, reason?: string): Promise<void>;
   count?(): Promise<number>;
   reset?(): Promise<void>;
@@ -34,6 +35,9 @@ export class NullMemoryAdapter implements MemoryAdapter {
   }
   async reset(): Promise<void> {
     /* nothing to reset */
+  }
+  async listDocs(): Promise<{ id: string; content: string; tier?: string }[]> {
+    return [];
   }
 }
 
@@ -65,12 +69,12 @@ export class OracleAdapter implements MemoryAdapter {
 
   async learn(
     pattern: string,
-    opts: { concepts?: string[]; project?: string; source?: string } = {},
+    opts: { concepts?: string[]; project?: string; source?: string; tier?: "raw" | "distilled" } = {},
   ): Promise<{ id: string }> {
     const res = await fetch(new URL(this.learnPath, this.baseUrl), {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ pattern, concepts: opts.concepts, project: opts.project, source: opts.source ?? "auralis" }),
+      body: JSON.stringify({ pattern, concepts: opts.concepts, project: opts.project, source: opts.source ?? "auralis", tier: opts.tier }),
       signal: AbortSignal.timeout(30_000),
     });
     if (!res.ok) throw new Error(`oracle learn ${res.status}: ${await res.text()}`);
@@ -93,6 +97,17 @@ export class OracleAdapter implements MemoryAdapter {
     if (!res.ok) throw new Error(`oracle stats ${res.status}`);
     const body = (await res.json()) as { count?: number };
     return Number(body.count ?? 0);
+  }
+
+  async listDocs(opts: { tier?: string; project?: string; max?: number } = {}): Promise<{ id: string; content: string; tier?: string }[]> {
+    const u = new URL("/api/docs", this.baseUrl);
+    if (opts.tier) u.searchParams.set("tier", opts.tier);
+    if (opts.project) u.searchParams.set("project", opts.project);
+    u.searchParams.set("max", String(opts.max ?? 200));
+    const res = await fetch(u, { signal: AbortSignal.timeout(10_000) });
+    if (!res.ok) throw new Error(`oracle docs ${res.status}`);
+    const body = (await res.json()) as { docs?: any[] };
+    return (body.docs ?? []).map((d) => ({ id: String(d.id), content: String(d.content), tier: d.tier }));
   }
 
   // Bench-only: clear the brain between trials (requires the server to run with ORACLE_ALLOW_RESET).

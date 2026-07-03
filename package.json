@@ -12,7 +12,8 @@
     "values": "tsx src/run-values.ts",
     "bench": "tsx src/bench.ts",
     "decisions": "tsx src/decisions.ts",
-    "embed": "tsx src/embed-sidecar.ts"
+    "embed": "tsx src/embed-sidecar.ts",
+    "distill": "tsx src/run-distill.ts"
   },
   "keywords": [],
   "author": "",

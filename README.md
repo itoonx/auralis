@@ -92,6 +92,30 @@ That's what a static `.md` can't do — and why hand-kept ADRs rot.
 pnpm decisions   # print the honest ADR log straight from the brain
 ```
 
+## Distillation: the brain gets sharper, not just bigger
+
+A persistent brain has a failure mode a blank page doesn't: it **rots by accumulation**. Run the fleet
+enough times and the brain fills with near-duplicate notes ("the sign-in flow validates credentials",
+"login checks the password and issues a token") and the occasional contradiction. Search still works,
+but every recall now wades through five ways of saying the same thing.
+
+Distillation is the janitor. It reads the raw findings, **clusters the ones that mean the same thing**
+(by semantic similarity, not shared words), synthesises each cluster into one vetted finding, and
+**supersedes** the raws — same append-only guarantee as everything else, so the originals stay
+searchable but the consolidated one is what surfaces.
+
+```bash
+pnpm distill                    # cheap heuristic consolidation (no model calls)
+AURALIS_DISTILL_LLM=1 pnpm distill   # let Claude Code merge each cluster (higher quality, costs)
+AURALIS_SEMANTIC=1 pnpm distill      # cluster by meaning via the embed-sidecar
+```
+
+Proven on a live brain: seeded with two ways of describing the sign-in flow plus one unrelated Bitcoin
+note, `pnpm distill` collapsed the two into a single vetted finding, superseded both raws, and left the
+Bitcoin note untouched — after which a search for *"how do we authenticate a user"* returned the
+**vetted** finding first, with the superseded raws still present but ranked below it. Findings carry a
+`tier` (`raw` → `distilled`) so you can always tell hard-won consolidation from a first-pass note.
+
 ## What it can do — proven on live runs
 
 Every claim below was measured on real Claude Code runs (over auralis's own codebase), not asserted.
@@ -178,6 +202,7 @@ AURALIS_TRIALS=3 AURALIS_TASKS=benchmarks/core.json AURALIS_PROJECT_DIR=/path/to
 | `src/runner.ts` | drive Claude Code (or a deterministic stub for tests) |
 | `src/audit.ts` | turn a run's provenance into a plain-language "why" |
 | `src/decision.ts` | honest ADRs recorded into the brain — kept & superseded, never deleted |
+| `src/distill.ts` · `run-distill.ts` | cluster near-duplicate findings → one vetted finding, supersede the raws (`pnpm distill`) |
 | `src/embed-sidecar.ts` | Node sidecar serving real semantic embeddings (oracle-lite calls it) |
 | `src/run.ts` · `run-persist.ts` · `run-values.ts` | the three live demos |
 
