@@ -29,3 +29,28 @@ export async function coordinate(
   }
   return { perWorker, reuses };
 }
+
+export interface SessionMetrics {
+  label: string;
+  cold: boolean;
+  crossSessionRecall: number; // findings the brain already held for this goal (written by PRIOR sessions)
+  explored: number; // distinct targets this session explored
+}
+
+// Run ONE independent analysis session against the shared brain. The only thing linking it to other
+// sessions is the (persistent) brain — a fresh environment + worker start with no in-memory carryover.
+// crossSessionRecall is measured BEFORE this session writes anything, so any hit came from a prior session.
+export async function runOneSession(
+  goal: string,
+  label: string,
+  librarian: MemoryLibrarian,
+  makeWorker: (id: string) => Worker,
+  cold = false,
+): Promise<SessionMetrics> {
+  const pre = await librarian.injectFor(goal);
+  const crossSessionRecall = pre.hitIds.length;
+  const worker = makeWorker(label);
+  const res = await worker.run(goal, pre.context);
+  await librarian.capture(label, goal, res);
+  return { label, cold, crossSessionRecall, explored: new Set(res.explored.map((e) => e.target)).size };
+}

@@ -7,7 +7,8 @@
     "test": "vitest run",
     "dev": "tsx src/run.ts",
     "typecheck": "tsc --noEmit",
-    "oracle": "bun run oracle-lite/server.ts"
+    "oracle": "bun run oracle-lite/server.ts",
+    "persist": "tsx src/run-persist.ts"
   },
   "keywords": [],
   "author": "",
