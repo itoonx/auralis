@@ -49,6 +49,7 @@ export interface FleetCfg {
   project: string;
   maxTurns: number;
   concurrency: number;
+  maxRetries?: number; // self-repair retries per task (0 = off)
   out?: string; // when set, write trace + provenance files
 }
 
@@ -70,6 +71,7 @@ export async function runFleet(
   };
   const outcome = await coordinate(nodes, makeWorker, new MemoryLibrarian(adapter, cfg.project), {
     concurrency: cfg.concurrency,
+    maxRetries: cfg.maxRetries,
   });
   if (cfg.out) {
     mkdirSync(cfg.out, { recursive: true });

@@ -32,7 +32,7 @@ deleted, and every run can explain *why* it produced what it did.
 auralis runs its agents as a **society** on the [mozaik](https://github.com/jigjoy-ai/mozaik) runtime —
 participants that react to each other on a shared event bus, rather than following a fixed script.
 
-- **Planner** turns your one-line goal into a small graph of subtasks.
+- **Planner** turns your one-line goal into a small **dependency graph** of subtasks — a few exploration tasks feeding a final synthesis.
 - **Conductor** walks that graph in order. Before each task it *pulls* relevant knowledge out of the
   brain; after each task it *pushes* the new findings back in.
 - **Workers** are real Claude Code agents (via the Agent SDK — no API key, it reuses your existing
@@ -40,6 +40,7 @@ participants that react to each other on a shared event bus, rather than followi
 - **MemoryLibrarian** is the bridge to the brain: it injects what's already known before a worker
   starts, and captures what it found afterwards.
 - **Sentry** watches the bus and flags, live, when two workers wander into the same territory.
+- **Critic** grades each answer and quietly retries the weak or cut-off ones, so a worker that hits its turn limit doesn't poison the shared brain with a half-finished note (self-repair).
 - **Auditor** records everything, so any run leaves a readable "why did it do that?" trail.
 
 The brain itself is **oracle-lite** — a tiny local service (Bun + SQLite full-text search). It's
@@ -147,7 +148,7 @@ AURALIS_TRIALS=3 AURALIS_TASKS=benchmarks/core.json AURALIS_PROJECT_DIR=/path/to
 |---|---|
 | `oracle-lite/server.ts` | the shared brain — learn / search / supersede / stats (no delete route) |
 | `src/planner.ts`, `src/dag.ts` | turn a goal into a dependency graph |
-| `src/conductor.ts` | walk the graph; pull-before / push-after the brain |
+| `src/conductor.ts` | walk the graph (level-parallel), self-repair via a Critic, pull-before / push-after the brain |
 | `src/participants.ts` | Worker, MemoryLibrarian, Sentry, Auditor |
 | `src/runner.ts` | drive Claude Code (or a deterministic stub for tests) |
 | `src/audit.ts` | turn a run's provenance into a plain-language "why" |

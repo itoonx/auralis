@@ -15,6 +15,7 @@ const OUT = process.env.AURALIS_OUT ?? "./.auralis-out";
 const MAX_TURNS = Number(process.env.AURALIS_MAX_TURNS ?? 10);
 const PLAN_TURNS = Number(process.env.AURALIS_PLAN_TURNS ?? 6);
 const CONCURRENCY = Number(process.env.AURALIS_PARALLEL ?? 1);
+const RETRIES = Number(process.env.AURALIS_RETRIES ?? 1); // self-repair retries per task
 const GOAL =
   process.env.AURALIS_GOAL ??
   "Understand this codebase end-to-end: its architecture, core modules, primary end-to-end flow, and error handling.";
@@ -26,7 +27,7 @@ async function main() {
     console.log("· resolving tasks…");
     const nodes = await resolveTasks(PROJECT_DIR, GOAL, PLAN_TURNS);
     console.log(`${nodes.length} task(s), ${buildLevels(nodes).length} level(s): ${nodes.map((n) => n.id).join(", ")}`);
-    const cfg = { projectDir: PROJECT_DIR, project: PROJECT, maxTurns: MAX_TURNS, concurrency: CONCURRENCY, out: OUT };
+    const cfg = { projectDir: PROJECT_DIR, project: PROJECT, maxTurns: MAX_TURNS, concurrency: CONCURRENCY, maxRetries: RETRIES, out: OUT };
 
     console.log("▶ baseline (no shared memory)…");
     const base = await runFleet("baseline", new NullMemoryAdapter(), nodes, cfg);
@@ -39,7 +40,7 @@ async function main() {
 
     console.log("\n─── auralis fleet run ───");
     console.log(`baseline: fleet-redundant=${baseRed}, sentry overlap warnings=${base.warnings}`);
-    console.log(`shared  : fleet-redundant=${sharedRed}, sentry overlap warnings=${shared.warnings}, reuses=${shared.outcome.reuses}`);
+    console.log(`shared  : fleet-redundant=${sharedRed}, sentry overlap warnings=${shared.warnings}, reuses=${shared.outcome.reuses}, self-repairs=${shared.outcome.repairs}`);
     console.log(`redundancy reduction: ${(pct * 100).toFixed(1)}%   (target ≥ 30%)`);
     console.log("\n" + explainProvenance(shared.outcome.provenance));
 

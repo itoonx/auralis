@@ -7,11 +7,12 @@ import type { DagNode } from "./dag";
 export async function planGoal(runner: AgentRunner, goal: string): Promise<DagNode[]> {
   const prompt =
     `You are the planner for a team of code-analysis agents working on THIS repository.\n` +
-    `Decompose the goal below into EXACTLY 3 subtasks. Each must examine a DIFFERENT aspect of the ` +
-    `codebase (they will naturally share the core modules). Keep them mostly independent.\n\n` +
+    `Decompose the goal below into 2-3 EXPLORATION subtasks that each examine a DIFFERENT aspect of the ` +
+    `codebase (each with dependsOn: []), PLUS one final SYNTHESIS subtask whose dependsOn lists ALL of ` +
+    `the exploration subtask ids, tying their findings together.\n\n` +
     `Goal: ${goal}\n\n` +
     `Output ONLY a JSON array, no prose:\n` +
-    `[{"id":"kebab-id","question":"a concrete analysis question","dependsOn":[]}]`;
+    `[{"id":"kebab-id","question":"a concrete analysis question","dependsOn":["prerequisite-ids"]}]`;
   const { result } = await runner.run(prompt);
   return parsePlan(result);
 }
