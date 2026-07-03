@@ -1,5 +1,7 @@
 # auralis
 
+[![CI](https://github.com/itoonx/Auralis/actions/workflows/ci.yml/badge.svg)](https://github.com/itoonx/Auralis/actions/workflows/ci.yml)
+
 **A team of AI agents that explore a codebase together — and remember what they learn.**
 
 Point auralis at any repository and it spins up a small society of Claude Code agents to analyse it.
@@ -123,6 +125,21 @@ pnpm values
 
 Everything project-specific — the target repo, the goal, the tasks — comes from environment
 variables, so auralis isn't tied to any one project. See `.env.example`.
+
+## Tuning: sharing vs. speed
+
+By default the fleet runs **sequentially** (`AURALIS_PARALLEL=1`), which maximises sharing — every task
+sees everything its predecessors found. Set `AURALIS_PARALLEL=3` to run each dependency level's tasks
+concurrently: faster, but tasks in the same level start together and can't reuse each other (only
+findings from *earlier* levels carry over). It's a genuine speed-vs-sharing dial.
+
+To measure the payoff robustly instead of eyeballing one noisy run, `pnpm bench` runs the experiment
+several times over a fixed task set (resetting the brain between trials) and reports the spread:
+
+```bash
+AURALIS_TRIALS=3 AURALIS_TASKS=benchmarks/core.json AURALIS_PROJECT_DIR=/path/to/repo pnpm bench
+# → redundancy reduction: mean 41.2% · min 33.3% · max 50.0% · sd 6.8
+```
 
 ## Project layout
 

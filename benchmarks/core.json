@@ -1,0 +1,5 @@
+[
+  { "id": "architecture", "question": "Describe the overall architecture and the core modules of this codebase, and how they connect. Be concise." },
+  { "id": "data-flow", "question": "Trace the primary data or control flow through the core modules of this codebase, from entry point to result. Be concise." },
+  { "id": "error-handling", "question": "Explain how the core modules of this codebase handle errors and failures. Be concise." }
+]

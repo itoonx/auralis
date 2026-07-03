@@ -9,7 +9,8 @@
     "typecheck": "tsc --noEmit",
     "oracle": "bun run oracle-lite/server.ts",
     "persist": "tsx src/run-persist.ts",
-    "values": "tsx src/run-values.ts"
+    "values": "tsx src/run-values.ts",
+    "bench": "tsx src/bench.ts"
   },
   "keywords": [],
   "author": "",

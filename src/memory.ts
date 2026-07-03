@@ -16,6 +16,7 @@ export interface MemoryAdapter {
   learn(pattern: string, opts?: { concepts?: string[]; project?: string; source?: string }): Promise<{ id: string }>;
   supersede?(oldId: string, newId: string, reason?: string): Promise<void>;
   count?(): Promise<number>;
+  reset?(): Promise<void>;
 }
 
 export class NullMemoryAdapter implements MemoryAdapter {
@@ -30,6 +31,9 @@ export class NullMemoryAdapter implements MemoryAdapter {
   }
   async count(): Promise<number> {
     return 0;
+  }
+  async reset(): Promise<void> {
+    /* nothing to reset */
   }
 }
 
@@ -89,6 +93,12 @@ export class OracleAdapter implements MemoryAdapter {
     if (!res.ok) throw new Error(`oracle stats ${res.status}`);
     const body = (await res.json()) as { count?: number };
     return Number(body.count ?? 0);
+  }
+
+  // Bench-only: clear the brain between trials (requires the server to run with ORACLE_ALLOW_RESET).
+  async reset(): Promise<void> {
+    const res = await fetch(new URL("/api/reset", this.baseUrl), { method: "POST", signal: AbortSignal.timeout(5_000) });
+    if (!res.ok) throw new Error(`oracle reset ${res.status} (is ORACLE_ALLOW_RESET set on the sidecar?)`);
   }
 }
 

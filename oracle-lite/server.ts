@@ -79,6 +79,14 @@ const server = Bun.serve({
       return Response.json({ success: true, oldId, newId });
     }
 
+    // Bench-only: wipe the brain between trials. Gated behind ORACLE_ALLOW_RESET so it does not exist
+    // in normal use — the append-only / no-delete guarantee is unchanged unless a benchmark opts in.
+    if (req.method === "POST" && url.pathname === "/api/reset" && process.env.ORACLE_ALLOW_RESET) {
+      db.run("DELETE FROM docs;");
+      db.run("DELETE FROM docs_fts;");
+      return Response.json({ success: true, reset: true });
+    }
+
     if (req.method === "GET" && url.pathname === "/api/search") {
       const q = url.searchParams.get("q") ?? "";
       const limit = Math.max(1, Math.min(50, Number(url.searchParams.get("limit") ?? 5)));
