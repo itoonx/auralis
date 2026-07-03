@@ -27,8 +27,8 @@ When you run several AI agents on the same codebase, three things go wrong:
 auralis fixes all three by giving the agents a **shared brain** (a small, persistent memory) plus enough
 **coordination** that they hand findings to each other instead of stepping on each other's toes. The
 brain is **append-only and auditable** — nothing it learns is ever silently deleted — and it doesn't
-just store text: it recalls by *meaning*, consolidates duplicates into vetted findings, and links
-findings into a **knowledge graph**.
+just store text: it recalls by *meaning* and consolidates duplicates into vetted findings — and it's
+beginning to link findings into a **knowledge graph** (an early foundation, not yet used in recall).
 
 ## How it works
 
@@ -57,7 +57,7 @@ The brain is **oracle-lite** — a tiny local service (Bun + SQLite full-text se
 that a finding is searchable the instant it's written — and it degrades gracefully to keyword-only if
 the vector layer isn't available.
 
-On top of plain storage, the brain does four things a flat memory can't:
+On top of plain storage, the brain does several things a flat memory can't:
 
 ### 1. Recall by meaning, not keywords
 With `AURALIS_SEMANTIC=1` the vectors are **real sentence embeddings** (all-MiniLM-L6-v2, via a small
@@ -76,11 +76,15 @@ pnpm distill                         # free heuristic consolidation
 AURALIS_DISTILL_LLM=1 pnpm distill   # let Claude Code merge each cluster (higher quality, costs)
 ```
 
-### 3. A knowledge graph — findings that connect
+### 3. A knowledge graph — *foundation, in progress*
+> **Status: experimental.** The concept is inspired by [cognee](https://github.com/topoteretes/cognee)'s
+> `cognify` step — auralis takes the *idea* only and does **not** use or depend on cognee. The graph is
+> built today, but **recall does not use it yet**; traversing it for relationship-style answers is the
+> next milestone.
+
 `pnpm cognify` reads each finding, extracts **entity/relationship triplets**, and stores them as graph
 edges keyed by a normalized entity — so every finding that mentions `auth/session.ts` links to the
-*same node*. Two agents' separate notes about one module become connected knowledge instead of two
-unrelated blobs.
+*same node*. That gives the brain a graph *foundation*; wiring it into recall comes next.
 
 ```bash
 pnpm cognify                         # build the graph (free heuristic extraction)
@@ -139,9 +143,9 @@ The numbers are real but **directional** — each is from a single non-determini
 - **Nothing is lost, everything is explainable.** Outdated findings are *superseded* (flagged but still
   searchable), never deleted — there's no delete route at all — and every run writes a provenance trail
   of what each task recalled, explored, produced, and contributed.
-- **The brain refines and connects itself.** Distillation collapsed two ways of describing a sign-in flow
-  into one vetted finding (raws superseded, not deleted); cognify linked two workers' separate notes to a
-  single `auth/session.ts` node.
+- **The brain refines itself.** Distillation collapsed two ways of describing a sign-in flow into one
+  vetted finding (raws superseded, not deleted). *(The knowledge graph is a foundation only — see the
+  honest notes — not yet a recall capability.)*
 
 ## Architecture
 
@@ -192,7 +196,7 @@ so auralis isn't tied to any one project. See `.env.example`.
 | `pnpm values` | demonstrate append-only + supersession, never delete |
 | `pnpm bench` | run the experiment N times, report mean ± spread |
 | `pnpm distill` | consolidate near-duplicate findings into vetted ones |
-| `pnpm cognify` | build the knowledge graph from findings |
+| `pnpm cognify` | build the knowledge-graph foundation from findings (not yet used in recall) |
 | `pnpm decisions` | print the honest ADR log from the brain |
 | `pnpm oracle` | run the brain sidecar on its own |
 | `pnpm embed` | run the semantic embedding sidecar |
@@ -224,7 +228,7 @@ AURALIS_TRIALS=3 AURALIS_TASKS=benchmarks/core.json AURALIS_PROJECT_DIR=/path/to
 | `src/memory.ts` | the brain behind a swappable adapter |
 | `src/embed.ts`, `src/embed-sidecar.ts` | real semantic embeddings (a sentence-transformer sidecar) |
 | `src/distill.ts`, `src/run-distill.ts` | cluster near-duplicate findings → one vetted finding, supersede the raws |
-| `src/graph.ts`, `src/run-cognify.ts` | cognify findings into entity/relationship edges — the brain as a graph |
+| `src/graph.ts`, `src/run-cognify.ts` | cognify findings into entity/relationship edges (graph foundation; recall doesn't use it yet) |
 | `src/decision.ts`, `src/decisions.ts` | honest ADRs recorded into the brain — kept & superseded, never deleted |
 | `src/run.ts` · `run-persist.ts` · `run-values.ts` · `bench.ts` | the live demos + the benchmark |
 
@@ -237,8 +241,9 @@ AURALIS_TRIALS=3 AURALIS_TASKS=benchmarks/core.json AURALIS_PROJECT_DIR=/path/to
 - **The heuristic paths are shallow by design.** Distillation clustering, graph extraction, and the Critic
   all ship a free deterministic heuristic and an optional Claude Code path (`*_LLM=1`) for real quality.
   The heuristics keep everything offline-safe and CI-green; reach for the LLM path when the output matters.
-- **The graph is built, not yet queried.** Findings become nodes and edges today; blending that graph into
-  recall (relationship-style answers) is the next step, not something it does yet.
+- **The graph is a foundation, not yet used.** Findings become nodes and edges today — a concept inspired
+  by cognee (auralis doesn't use or depend on cognee) — but blending that graph into recall
+  (relationship-style answers) is the next milestone, not something it does yet.
 - **Read-and-analyse, not write.** auralis coordinates reading. Parallel writing/merges is deliberately out
   of scope for now.
 
