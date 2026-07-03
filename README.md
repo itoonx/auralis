@@ -43,8 +43,10 @@ participants that react to each other on a shared event bus, rather than followi
 - **Critic** grades each answer and quietly retries the weak or cut-off ones, so a worker that hits its turn limit doesn't poison the shared brain with a half-finished note (self-repair).
 - **Auditor** records everything, so any run leaves a readable "why did it do that?" trail.
 
-The brain itself is **oracle-lite** — a tiny local service (Bun + SQLite full-text search). It's
-persistent, append-only, and fast enough that a finding is searchable the instant it's written.
+The brain itself is **oracle-lite** — a tiny local service (Bun + SQLite full-text search, plus an
+optional **LanceDB** vector index merged into a hybrid ranking). It's persistent, append-only, and fast
+enough that a finding is searchable the instant it's written — and it degrades gracefully to
+keyword-only if the vector layer isn't available.
 
 ## The hard part isn't the model — it's the shared state
 
@@ -146,7 +148,7 @@ AURALIS_TRIALS=3 AURALIS_TASKS=benchmarks/core.json AURALIS_PROJECT_DIR=/path/to
 
 | Path | What it is |
 |---|---|
-| `oracle-lite/server.ts` | the shared brain — learn / search / supersede / stats (no delete route) |
+| `oracle-lite/server.ts` | the shared brain — hybrid FTS + LanceDB vector search, learn / supersede / stats (no delete route) |
 | `src/planner.ts`, `src/dag.ts` | turn a goal into a dependency graph |
 | `src/conductor.ts` | walk the graph (level-parallel), self-repair via a Critic, pull-before / push-after the brain |
 | `src/participants.ts` | Worker, MemoryLibrarian, Sentry, Auditor |
@@ -158,7 +160,11 @@ AURALIS_TRIALS=3 AURALIS_TASKS=benchmarks/core.json AURALIS_PROJECT_DIR=/path/to
 
 The live numbers are real but **directional** — how much you save depends on how much the tasks
 overlap and how faithfully the agents reuse what they're handed. The deterministic tests pin down the
-*mechanisms*; the live runs show them working. Making the numbers robust across many runs is next.
+*mechanisms*; the live runs show them working.
+
+The brain's vector layer uses a lightweight built-in embedder (subword feature-hashing), so its recall
+is fuzzy rather than deeply semantic — it's structured to swap in a real embedding model (Ollama,
+transformers) when one is available.
 
 ---
 
