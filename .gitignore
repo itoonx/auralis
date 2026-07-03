@@ -1,0 +1,9 @@
+node_modules/
+.auralis-out/
+.env
+dist/
+*.sqlite*
+
+# local planning / tooling (references private monorepo) — not for the public repo
+.claude/
+.DS_Store
