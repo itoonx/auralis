@@ -35,7 +35,7 @@ const insDoc = db.query("INSERT INTO docs (id, content, concepts, project, sourc
 const insFts = db.query("INSERT INTO docs_fts (id, content, concepts) VALUES (?, ?, ?)");
 const supersedeStmt = db.query("UPDATE docs SET superseded_by = ?, superseded_at = ?, superseded_reason = ? WHERE id = ?");
 const countStmt = db.query("SELECT COUNT(*) AS c FROM docs");
-const getDocStmt = db.query("SELECT id, content, source, superseded_by FROM docs WHERE id = ?");
+const getDocStmt = db.query("SELECT id, content, source, superseded_by, project FROM docs WHERE id = ?");
 const insEdge = db.query("INSERT INTO edges (subject, predicate, object, subj_key, obj_key, doc_id, project, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
 const edgeCountStmt = db.query("SELECT COUNT(*) AS c FROM edges");
 const nodeCountStmt = db.query("SELECT COUNT(*) AS c FROM (SELECT subj_key AS k FROM edges UNION SELECT obj_key FROM edges)");
@@ -268,8 +268,20 @@ const server = Bun.serve({
       const q = url.searchParams.get("q") ?? "";
       const limit = Math.max(1, Math.min(50, Number(url.searchParams.get("limit") ?? 5)));
       const mode = url.searchParams.get("mode") ?? "hybrid";
+      const project = url.searchParams.get("project"); // recall must not leak across projects
 
-      const ftsRows = mode === "vector" ? [] : (searchStmt.all(sanitize(q), limit * 3) as any[]);
+      const ftsRows =
+        mode === "vector"
+          ? []
+          : ((project
+              ? db
+                  .query(
+                    `SELECT d.id AS id, d.content AS content, d.source AS source, d.superseded_by AS superseded_by, bm25(docs_fts) AS rank
+                     FROM docs_fts JOIN docs d ON d.id = docs_fts.id
+                     WHERE docs_fts MATCH ? AND d.project = ? ORDER BY rank LIMIT ?`,
+                  )
+                  .all(sanitize(q), project, limit * 3)
+              : searchStmt.all(sanitize(q), limit * 3)) as any[]);
       const vScores = mode === "fts" ? new Map<string, number>() : await vectorQuery(q, limit * 3);
 
       const merged = new Map<string, { id: string; content: string; source: string; superseded_by: any; score: number }>();
@@ -282,7 +294,8 @@ const server = Bun.serve({
       for (const [id, v] of vScores) {
         if (merged.has(id)) continue;
         const d = getDocStmt.get(id) as any;
-        if (d) merged.set(id, { id, content: d.content, source: d.source ?? "vector", superseded_by: d.superseded_by, score: 0.5 * v * (d.superseded_by ? 0.3 : 1) });
+        if (!d || (project && d.project !== project)) continue;
+        merged.set(id, { id, content: d.content, source: d.source ?? "vector", superseded_by: d.superseded_by, score: 0.5 * v * (d.superseded_by ? 0.3 : 1) });
       }
 
       const results = [...merged.values()]
