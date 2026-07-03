@@ -13,16 +13,31 @@ import { brainMcpServer } from "./brain-mcp";
 import type { DagNode } from "./dag";
 
 export async function ensureOracle(): Promise<() => void> {
-  if (await oracleReachable()) return () => {};
-  const child = spawn("bun", ["run", "oracle-lite/server.ts"], {
-    env: { ...process.env, ORACLE_RESET: "1" },
-    stdio: "inherit",
-  });
+  const stops: (() => void)[] = [];
+
+  // Optional semantic embed-sidecar (Node). oracle-lite, spawned below, inherits ORACLE_EMBED_URL.
+  if (process.env.AURALIS_SEMANTIC === "1" && !process.env.ORACLE_EMBED_URL) {
+    const port = Number(process.env.EMBED_PORT ?? 47779);
+    const url = `http://localhost:${port}`;
+    const embed = spawn("pnpm", ["exec", "tsx", "src/embed-sidecar.ts"], { env: { ...process.env, EMBED_PORT: String(port) }, stdio: "inherit" });
+    stops.push(() => { try { embed.kill(); } catch { /* noop */ } });
+    let up = false;
+    for (let i = 0; i < 180; i++) { // first run downloads the model
+      try { if ((await fetch(`${url}/health`, { signal: AbortSignal.timeout(3_000) })).ok) { up = true; break; } } catch { /* not yet */ }
+      await new Promise((r) => setTimeout(r, 1000));
+    }
+    if (up) { process.env.ORACLE_EMBED_URL = url; console.log(`· embed-sidecar ready (${url})`); }
+    else console.error("· embed-sidecar did not come up — falling back to the built-in embedder");
+  }
+
+  if (await oracleReachable()) return () => stops.forEach((s) => s());
+  const child = spawn("bun", ["run", "oracle-lite/server.ts"], { env: { ...process.env, ORACLE_RESET: "1" }, stdio: "inherit" });
+  stops.push(() => { try { child.kill(); } catch { /* noop */ } });
   for (let i = 0; i < 60; i++) {
-    if (await oracleReachable()) return () => { try { child.kill(); } catch { /* noop */ } };
+    if (await oracleReachable()) return () => stops.forEach((s) => s());
     await new Promise((r) => setTimeout(r, 200));
   }
-  try { child.kill(); } catch { /* noop */ }
+  stops.forEach((s) => s());
   throw new Error("oracle-lite failed to start on :47778");
 }
 

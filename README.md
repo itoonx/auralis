@@ -46,7 +46,8 @@ participants that react to each other on a shared event bus, rather than followi
 The brain itself is **oracle-lite** — a tiny local service (Bun + SQLite full-text search, plus an
 optional **LanceDB** vector index merged into a hybrid ranking). It's persistent, append-only, and fast
 enough that a finding is searchable the instant it's written — and it degrades gracefully to
-keyword-only if the vector layer isn't available.
+keyword-only if the vector layer isn't available. With `AURALIS_SEMANTIC=1` the vectors are **real
+sentence embeddings** (via a small Node sidecar), so recall works by *meaning*, not just keywords.
 
 ## The hard part isn't the model — it's the shared state
 
@@ -177,6 +178,7 @@ AURALIS_TRIALS=3 AURALIS_TASKS=benchmarks/core.json AURALIS_PROJECT_DIR=/path/to
 | `src/runner.ts` | drive Claude Code (or a deterministic stub for tests) |
 | `src/audit.ts` | turn a run's provenance into a plain-language "why" |
 | `src/decision.ts` | honest ADRs recorded into the brain — kept & superseded, never deleted |
+| `src/embed-sidecar.ts` | Node sidecar serving real semantic embeddings (oracle-lite calls it) |
 | `src/run.ts` · `run-persist.ts` · `run-values.ts` | the three live demos |
 
 ## Honest notes
@@ -185,9 +187,10 @@ The live numbers are real but **directional** — how much you save depends on h
 overlap and how faithfully the agents reuse what they're handed. The deterministic tests pin down the
 *mechanisms*; the live runs show them working.
 
-The brain's vector layer uses a lightweight built-in embedder (subword feature-hashing), so its recall
-is fuzzy rather than deeply semantic — it's structured to swap in a real embedding model (Ollama,
-transformers) when one is available.
+The brain's vector layer runs **real semantic embeddings** through a small Node sidecar (a
+sentence-transformer) when you opt in with `AURALIS_SEMANTIC=1` — so a search for *"how do we
+authenticate users"* finds a note about *"the sign-in flow validates credentials"* despite zero shared
+words. Without the sidecar it falls back to a lightweight built-in (fuzzy) embedder, so it always runs.
 
 ---
 

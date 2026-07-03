@@ -1,8 +1,9 @@
 // oracle-lite — our own shared-brain sidecar. Bun + bun:sqlite (FTS5) for keyword search, plus an
-// OPTIONAL LanceDB vector index for semantic-ish recall, merged into a hybrid ranking. Everything
-// vector-related is best-effort: if LanceDB or embedding fails, the brain silently falls back to
-// FTS-only, so it always boots. VALUES LAYER: append-only — no delete route; obsolescence is expressed
-// by SUPERSESSION. FTS writes are synchronous (read-after-write).
+// OPTIONAL LanceDB vector index for semantic recall, merged into a hybrid ranking. Embeddings come from
+// a Node embed-sidecar when ORACLE_EMBED_URL is set (real sentence-transformer, semantic); otherwise a
+// built-in char-trigram embedder (fuzzy). Either way it's best-effort: if the sidecar or LanceDB fails,
+// the brain silently falls back, so it always boots. VALUES LAYER: append-only — no delete route;
+// obsolescence is SUPERSESSION. FTS writes are synchronous (read-after-write).
 import { Database } from "bun:sqlite";
 import { mkdirSync } from "node:fs";
 
@@ -43,39 +44,79 @@ function idFrom(content: string): string {
   return `learning_${Date.now()}_${slug}`.slice(0, 90);
 }
 
-// ---- built-in embedder: char-trigram + word feature-hashing → L2-normalized vector (no deps, no
-// downloads, works under Bun). Not deep-semantic, but catches subword/fuzzy matches FTS misses; swap
-// for a real model behind this function when one is available. ----
-const DIM = 256;
+// ---- embeddings: semantic via the Node sidecar (ORACLE_EMBED_URL) with a built-in fallback ----
+const EMBED_URL = process.env.ORACLE_EMBED_URL;
+let EMBED_DIM = 256; // built-in default; overwritten to the model's dim when semantic is on
+let embedder: "semantic" | "builtin" = "builtin";
+
 function hashStr(s: string): number {
   let h = 2166136261;
   for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
   return h >>> 0;
 }
-function embed(text: string): number[] {
-  const v = new Float32Array(DIM);
+function builtinEmbed(text: string, dim: number): number[] {
+  const v = new Float32Array(dim);
   const words = (text.toLowerCase().match(/[\p{L}\p{N}_]+/gu) ?? []).filter((w) => w.length > 1);
   for (const w of words) {
-    v[hashStr(w) % DIM] += 1;
+    v[hashStr(w) % dim] += 1;
     const p = `#${w}#`;
-    for (let i = 0; i + 3 <= p.length; i++) v[hashStr(p.slice(i, i + 3)) % DIM] += 1;
+    for (let i = 0; i + 3 <= p.length; i++) v[hashStr(p.slice(i, i + 3)) % dim] += 1;
   }
   let n = 0;
-  for (let i = 0; i < DIM; i++) n += v[i] * v[i];
+  for (let i = 0; i < dim; i++) n += v[i] * v[i];
   n = Math.sqrt(n) || 1;
   return Array.from(v, (x) => x / n);
 }
+async function semanticEmbed(text: string): Promise<number[] | null> {
+  try {
+    const res = await fetch(`${EMBED_URL}/embed`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ texts: [text.slice(0, 2000)] }),
+      signal: AbortSignal.timeout(30_000),
+    });
+    if (!res.ok) return null;
+    const body = (await res.json()) as { embeddings?: number[][] };
+    return body.embeddings?.[0] ?? null;
+  } catch {
+    return null;
+  }
+}
+async function embed(text: string): Promise<number[]> {
+  if (embedder === "semantic") {
+    const v = await semanticEmbed(text);
+    if (v && v.length === EMBED_DIM) return v;
+    return builtinEmbed(text, EMBED_DIM); // per-call fallback at the same dim
+  }
+  return builtinEmbed(text, EMBED_DIM);
+}
+async function initEmbedder() {
+  if (!EMBED_URL) return;
+  try {
+    const res = await fetch(`${EMBED_URL}/health`, { signal: AbortSignal.timeout(8_000) });
+    if (res.ok) {
+      const b = (await res.json()) as { dim?: number };
+      EMBED_DIM = Number(b.dim ?? 384);
+      embedder = "semantic";
+      console.error(`embedder: semantic (dim ${EMBED_DIM}) via ${EMBED_URL}`);
+      return;
+    }
+  } catch { /* fall through */ }
+  console.error("embedder: built-in (embed-sidecar unreachable)");
+}
 
-// ---- LanceDB vector layer (best-effort; FTS-only fallback) ----
+// ---- LanceDB vector layer (best-effort; FTS-only fallback). Dir namespaced by dim so semantic and
+// built-in vector spaces never mix. ----
 const dbDir = DB_PATH.replace(/[^/]*$/, "") || "./";
 const dbBase = (DB_PATH.match(/[^/]*$/)?.[0] ?? "brain").replace(/\.[^.]*$/, "");
-const LANCE_DIR = process.env.ORACLE_LANCEDB ?? `${dbDir}lancedb-${dbBase}`;
+let LANCE_DIR = "";
 let vdb: any = null;
 let vtable: any = null;
 let vectorsOn = false;
 
 async function initVectors() {
   if (process.env.ORACLE_NO_VECTORS) { console.error("vectors: disabled (ORACLE_NO_VECTORS)"); return; }
+  LANCE_DIR = process.env.ORACLE_LANCEDB ?? `${dbDir}lancedb-${dbBase}-d${EMBED_DIM}`;
   try {
     const lancedb: any = await import("@lancedb/lancedb");
     vdb = await lancedb.connect(LANCE_DIR);
@@ -83,7 +124,7 @@ async function initVectors() {
     const names: string[] = await vdb.tableNames();
     if (names.includes("docs")) vtable = await vdb.openTable("docs");
     vectorsOn = true;
-    console.error(`vectors: LanceDB ON (${LANCE_DIR})`);
+    console.error(`vectors: LanceDB ON (${LANCE_DIR}, ${embedder})`);
   } catch (e) {
     vectorsOn = false;
     console.error("vectors: OFF, FTS-only fallback —", String(e).slice(0, 120));
@@ -92,7 +133,7 @@ async function initVectors() {
 async function vectorAdd(id: string, content: string) {
   if (!vectorsOn) return;
   try {
-    const row = { id, vector: embed(content), content: content.slice(0, 2000) };
+    const row = { id, vector: await embed(content), content: content.slice(0, 2000) };
     if (!vtable) vtable = await vdb.createTable("docs", [row]);
     else await vtable.add([row]);
   } catch (e) { console.error("vector add failed, disabling vectors:", String(e).slice(0, 100)); vectorsOn = false; }
@@ -101,7 +142,7 @@ async function vectorQuery(text: string, k: number): Promise<Map<string, number>
   const out = new Map<string, number>();
   if (!vectorsOn || !vtable) return out;
   try {
-    const rows: any[] = await vtable.search(embed(text)).limit(k).toArray();
+    const rows: any[] = await vtable.search(await embed(text)).limit(k).toArray();
     for (const r of rows) {
       const d = typeof r._distance === "number" ? r._distance : 1;
       out.set(String(r.id), 1 / (1 + d));
@@ -114,6 +155,7 @@ async function vectorReset() {
   try { await vdb.dropTable("docs"); vtable = null; } catch { /* ignore */ }
 }
 
+await initEmbedder();
 await initVectors();
 
 const server = Bun.serve({
@@ -121,11 +163,10 @@ const server = Bun.serve({
   async fetch(req) {
     const url = new URL(req.url);
 
-    if (url.pathname === "/health") return Response.json({ ok: true, vectors: vectorsOn });
-
+    if (url.pathname === "/health") return Response.json({ ok: true, vectors: vectorsOn, embedder });
     if (url.pathname === "/api/stats") {
       const row = countStmt.get() as { c: number };
-      return Response.json({ count: row.c, vectors: vectorsOn });
+      return Response.json({ count: row.c, vectors: vectorsOn, embedder });
     }
 
     if (req.method === "POST" && url.pathname === "/api/learn") {
@@ -136,8 +177,8 @@ const server = Bun.serve({
       const concepts = Array.isArray(body?.concepts) ? body.concepts.join(" ") : "";
       insDoc.run(id, pattern, concepts, body?.project ?? null, body?.source ?? "auralis", new Date().toISOString());
       insFts.run(id, pattern, concepts); // synchronous -> immediately searchable
-      await vectorAdd(id, pattern); // best-effort
-      return Response.json({ success: true, id, embedding: vectorsOn ? "vector" : "fts-only" });
+      await vectorAdd(id, pattern);
+      return Response.json({ success: true, id, embedding: vectorsOn ? embedder : "fts-only" });
     }
 
     if (req.method === "POST" && url.pathname === "/api/supersede") {
@@ -169,7 +210,7 @@ const server = Bun.serve({
       for (const r of ftsRows) {
         const ftsScore = 1 / (1 + Math.max(0, Number(r.rank)));
         const v = vScores.get(String(r.id)) ?? 0;
-        const score = (0.5 * ftsScore + 0.5 * v) * (v > 0 ? 1.1 : 1); // hybrid boost when both agree
+        const score = (0.5 * ftsScore + 0.5 * v) * (v > 0 ? 1.1 : 1);
         merged.set(String(r.id), { id: r.id, content: r.content, source: r.source, superseded_by: r.superseded_by, score });
       }
       for (const [id, v] of vScores) {
@@ -189,11 +230,11 @@ const server = Bun.serve({
           superseded_by: r.superseded_by ?? undefined,
           score: r.score,
         }));
-      return Response.json({ results, total: results.length, query: q, mode, vectors: vectorsOn });
+      return Response.json({ results, total: results.length, query: q, mode, vectors: vectorsOn, embedder });
     }
 
     return new Response("not found", { status: 404 });
   },
 });
 
-console.log(`oracle-lite (bun:sqlite FTS5${vectorsOn ? " + LanceDB vectors" : ", FTS-only"}) on http://localhost:${server.port}  db=${DB_PATH}`);
+console.log(`oracle-lite (FTS5${vectorsOn ? ` + LanceDB vectors/${embedder}` : ", FTS-only"}) on http://localhost:${server.port}  db=${DB_PATH}`);
