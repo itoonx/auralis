@@ -66,7 +66,7 @@ const server = Bun.serve({
       const rows = searchStmt.all(sanitize(q), limit) as any[];
       const results = rows.map((r) => ({
         id: r.id,
-        content: String(r.content).slice(0, 500),
+        content: String(r.content).slice(0, 2000),
         type: "learning",
         source: r.source ?? "fts",
         score: 1 / (1 + Math.max(0, Number(r.rank))),

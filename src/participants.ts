@@ -1,6 +1,6 @@
-// The mozaik society: workers on the shared AgenticEnvironment bus, an Auditor observing every
-// announcement, and a MemoryLibrarian bridging to the shared brain (pull before a worker runs,
-// push after). The Conductor sequences A -> B so B can reuse what A learned.
+// The mozaik society: workers on the shared AgenticEnvironment bus, observers (Auditor, Sentry) that
+// react to every announcement, and a MemoryLibrarian bridging to the shared brain. Coordination logic
+// lives in the Conductor (src/conductor.ts); this file is the participants + the M1 two-task helper.
 import { AgenticEnvironment, BaseParticipant, sendMessage } from "@mozaik-ai/core";
 import type { AgentRunner, RunResult, Exploration } from "./runner";
 import type { MemoryAdapter } from "./memory";
@@ -11,10 +11,11 @@ export interface TraceEvent {
   question?: string;
   summary?: string;
   count?: number;
+  targets?: string[];
   ts: number;
 }
 
-// Wraps an AgentRunner and announces its finding on the bus (observed by the Auditor).
+// Wraps an AgentRunner and announces its finding (with the targets it explored) on the bus.
 export class Worker extends BaseParticipant {
   constructor(
     public readonly id: string,
@@ -39,6 +40,7 @@ export class Worker extends BaseParticipant {
         question,
         summary: res.result.slice(0, 500),
         count: res.explored.length,
+        targets: res.explored.map((e) => e.target),
       }),
       this,
     );
@@ -62,6 +64,27 @@ export class Auditor extends BaseParticipant {
   }
 }
 
+// Reactive coordination observer — flags, live on the bus, when a second worker explores a target a
+// teammate already covered. This is the "coordination is reactive, not a hardcoded handoff" signal.
+export class Sentry extends BaseParticipant {
+  private readonly claimed = new Map<string, string>(); // target -> first worker that explored it
+  readonly warnings: { target: string; workers: [string, string] }[] = [];
+  async onMessage(message: string): Promise<void> {
+    let e: any;
+    try {
+      e = JSON.parse(message);
+    } catch {
+      return;
+    }
+    if (e?.kind !== "finding" || !Array.isArray(e.targets)) return;
+    for (const t of e.targets as string[]) {
+      const prev = this.claimed.get(t);
+      if (prev && prev !== e.workerId) this.warnings.push({ target: t, workers: [prev, e.workerId] });
+      else if (!prev) this.claimed.set(t, e.workerId);
+    }
+  }
+}
+
 // The bridge to the shared brain. Pull (search + inject) before a worker runs; push (learn) after.
 export class MemoryLibrarian {
   readonly learnedIds: string[] = [];
@@ -80,9 +103,9 @@ export class MemoryLibrarian {
 
   async capture(workerId: string, question: string, res: RunResult): Promise<string> {
     const pattern =
-      `[from worker ${workerId}] Q: ${question}\n` +
-      `Findings: ${res.result}\n` +
-      `Files already explored (do not re-read): ${res.explored.map((e) => e.target).join(", ")}`;
+      `Aspect already analysed by worker ${workerId} — question: ${question}\n` +
+      `Files fully covered (do NOT re-open or re-search these): ${res.explored.map((e) => e.target).join(", ")}\n` +
+      `Summary of findings: ${res.result}`;
     const { id } = await this.adapter.learn(pattern, {
       project: this.project,
       concepts: ["analysis"],
@@ -100,23 +123,24 @@ export interface TaskSpec {
 export interface RunOutcome {
   exploredA: Exploration[];
   exploredB: Exploration[];
-  reuse: boolean; // did B's injected context include a doc A just wrote?
+  reuse: boolean;
   resultA: string;
   resultB: string;
 }
 
-// One reference run: A explores with a cold brain, its findings land in memory, B reuses them.
+// M1 helper: the fixed two-task case (kept for the deterministic M1 test). The general N-task
+// coordination lives in src/conductor.ts::coordinate.
 export async function conductRun(
   task: TaskSpec,
   workerA: Worker,
   workerB: Worker,
   librarian: MemoryLibrarian,
 ): Promise<RunOutcome> {
-  const ctxA = await librarian.injectFor(task.qA); // empty on a cold brain / baseline
+  const ctxA = await librarian.injectFor(task.qA);
   const a = await workerA.run(task.qA, ctxA.context);
   const learnedIdA = await librarian.capture(workerA.id, task.qA, a);
 
-  const ctxB = await librarian.injectFor(task.qB); // now sees A's finding (FTS write is synchronous)
+  const ctxB = await librarian.injectFor(task.qB);
   const b = await workerB.run(task.qB, ctxB.context);
   await librarian.capture(workerB.id, task.qB, b);
 

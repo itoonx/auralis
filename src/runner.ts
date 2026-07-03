@@ -28,26 +28,32 @@ export class ClaudeCodeRunner implements AgentRunner {
   async run(prompt: string): Promise<RunResult> {
     const explored: Exploration[] = [];
     let result = "";
-    for await (const m of query({
-      prompt,
-      options: {
-        cwd: this.opts.cwd,
-        allowedTools: ["Read", "Grep", "Glob"],
-        permissionMode: "acceptEdits",
-        maxTurns: this.opts.maxTurns ?? 20,
-      } as any,
-    })) {
-      const msg: any = m;
-      if (msg.type === "assistant") {
-        for (const block of msg.message?.content ?? []) {
-          if (block?.type === "tool_use" && EXPLORE_TOOLS.has(block.name)) {
-            const target = targetOf(block.name, block.input);
-            if (target) explored.push({ tool: block.name, target });
+    try {
+      for await (const m of query({
+        prompt,
+        options: {
+          cwd: this.opts.cwd,
+          allowedTools: ["Read", "Grep", "Glob"],
+          permissionMode: "acceptEdits",
+          maxTurns: this.opts.maxTurns ?? 12,
+        } as any,
+      })) {
+        const msg: any = m;
+        if (msg.type === "assistant") {
+          for (const block of msg.message?.content ?? []) {
+            if (block?.type === "tool_use" && EXPLORE_TOOLS.has(block.name)) {
+              const target = targetOf(block.name, block.input);
+              if (target) explored.push({ tool: block.name, target });
+            }
           }
+        } else if (msg.type === "result" && msg.subtype === "success") {
+          result = String(msg.result ?? "");
         }
-      } else if (msg.type === "result" && msg.subtype === "success") {
-        result = String(msg.result ?? "");
       }
+    } catch (err) {
+      // The agent hit its turn/budget cap or errored mid-run. The exploration we captured before the
+      // throw is exactly what the redundancy metric needs, so keep it and note the early stop.
+      if (!result) result = `(worker stopped early: ${(err as Error).message})`;
     }
     return { result, explored };
   }

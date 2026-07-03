@@ -1,33 +1,27 @@
-// Live harness: boot the shared-brain sidecar, run a two-worker analysis task twice (shared vs.
-// baseline) with real Claude Code workers over a target codebase, and report the redundancy
-// reduction + cross-worker reuse. Nothing is project-specific — the target repo and the two worker
-// questions all come from the environment.
+// Live fleet harness (Milestone #2): boot the brain, have the Planner decompose one goal into a DAG,
+// then run the coordinated society twice (shared brain vs. baseline) with real Claude Code workers
+// over a target codebase, and report fleet redundancy reduction, reuse, and Sentry overlap warnings.
 import { writeFileSync, mkdirSync } from "node:fs";
 import { spawn } from "node:child_process";
 import { resolve } from "node:path";
 import { AgenticEnvironment } from "@mozaik-ai/core";
 import { OracleAdapter, NullMemoryAdapter, oracleReachable, type MemoryAdapter } from "./memory";
 import { ClaudeCodeRunner } from "./runner";
-import { Worker, Auditor, MemoryLibrarian, conductRun, type TaskSpec } from "./participants";
-import { redundantCount, reductionPct } from "./metrics";
+import { Worker, Auditor, Sentry, MemoryLibrarian } from "./participants";
+import { coordinate } from "./conductor";
+import { planGoal } from "./planner";
+import { buildLevels, type DagNode } from "./dag";
+import { fleetRedundantCount, reductionPct } from "./metrics";
 
 const PROJECT_DIR = resolve(process.env.AURALIS_PROJECT_DIR ?? process.cwd());
 const PROJECT = process.env.AURALIS_PROJECT ?? "default";
 const OUT = process.env.AURALIS_OUT ?? "./.auralis-out";
-const MAX_TURNS = Number(process.env.AURALIS_MAX_TURNS ?? 12);
+const MAX_TURNS = Number(process.env.AURALIS_MAX_TURNS ?? 10);
+const PLAN_TURNS = Number(process.env.AURALIS_PLAN_TURNS ?? 6);
+const GOAL =
+  process.env.AURALIS_GOAL ??
+  "Understand this codebase end-to-end: its architecture, core modules, primary end-to-end flow, and error handling.";
 
-// The two worker questions. Override per project via env; the defaults are generic and deliberately
-// overlap (both need the core), so the shared-brain effect is observable on any codebase.
-const TASK: TaskSpec = {
-  qA:
-    process.env.AURALIS_TASK_A ??
-    "Explain the core architecture of this codebase: the main modules and how they connect. Be concise.",
-  qB:
-    process.env.AURALIS_TASK_B ??
-    "Trace this codebase's primary end-to-end flow, module by module, from entry point to result. Be concise.",
-};
-
-// Make `pnpm dev` self-contained: start oracle-lite if it isn't already up, and return a stopper.
 async function ensureOracle(): Promise<() => void> {
   if (await oracleReachable()) return () => {};
   console.log("· starting oracle-lite sidecar…");
@@ -43,42 +37,51 @@ async function ensureOracle(): Promise<() => void> {
   throw new Error("oracle-lite failed to start on :47778");
 }
 
-async function runOnce(label: string, adapter: MemoryAdapter) {
+async function runFleet(label: string, adapter: MemoryAdapter, nodes: DagNode[]) {
   const env = new AgenticEnvironment();
   const auditor = new Auditor();
   auditor.join(env);
-  const mk = (id: string) => {
+  const sentry = new Sentry();
+  sentry.join(env);
+  const makeWorker = (id: string) => {
     const w = new Worker(id, env, new ClaudeCodeRunner({ cwd: PROJECT_DIR, maxTurns: MAX_TURNS }));
     w.join(env);
     return w;
   };
-  const outcome = await conductRun(TASK, mk("A"), mk("B"), new MemoryLibrarian(adapter, PROJECT));
+  const outcome = await coordinate(nodes, makeWorker, new MemoryLibrarian(adapter, PROJECT));
   mkdirSync(OUT, { recursive: true });
   writeFileSync(`${OUT}/trace-${label}.jsonl`, auditor.toJSONL());
-  writeFileSync(`${OUT}/outcome-${label}.json`, JSON.stringify(outcome, null, 2));
-  return outcome;
+  writeFileSync(`${OUT}/fleet-${label}.json`, JSON.stringify({ outcome, warnings: sentry.warnings }, null, 2));
+  return { outcome, warnings: sentry.warnings.length };
 }
 
 async function main() {
   console.log(`target project: ${PROJECT_DIR}`);
   const stop = await ensureOracle();
   try {
-    console.log("▶ baseline (no shared memory)…");
-    const base = await runOnce("baseline", new NullMemoryAdapter());
-    console.log("▶ shared brain (oracle-lite)…");
-    const shared = await runOnce("shared", new OracleAdapter());
+    console.log("· planning (decomposing goal into a DAG)…");
+    const planner = new ClaudeCodeRunner({ cwd: PROJECT_DIR, maxTurns: PLAN_TURNS });
+    const nodes = await planGoal(planner, GOAL);
+    const levels = buildLevels(nodes);
+    console.log(`planned ${nodes.length} subtasks (${levels.length} level(s)): ${nodes.map((n) => n.id).join(", ")}`);
 
-    const baseRed = redundantCount(base.exploredA, base.exploredB);
-    const sharedRed = redundantCount(shared.exploredA, shared.exploredB);
+    console.log("▶ baseline (no shared memory)…");
+    const base = await runFleet("baseline", new NullMemoryAdapter(), nodes);
+    console.log("▶ shared brain…");
+    const shared = await runFleet("shared", new OracleAdapter(), nodes);
+
+    const baseRed = fleetRedundantCount(base.outcome.perWorker.map((w) => w.explored));
+    const sharedRed = fleetRedundantCount(shared.outcome.perWorker.map((w) => w.explored));
     const pct = reductionPct(baseRed, sharedRed);
 
-    console.log("\n─── auralis milestone #1 (live) ───");
-    console.log(`baseline: A=${base.exploredA.length} B=${base.exploredB.length} explored, redundant=${baseRed}`);
-    console.log(`shared  : A=${shared.exploredA.length} B=${shared.exploredB.length} explored, redundant=${sharedRed}`);
+    console.log("\n─── auralis milestone #2 (live fleet) ───");
+    console.log(`plan: ${nodes.length} tasks`);
+    console.log(`baseline: fleet-redundant=${baseRed}, sentry overlap warnings=${base.warnings}`);
+    console.log(`shared  : fleet-redundant=${sharedRed}, sentry overlap warnings=${shared.warnings}, reuses=${shared.outcome.reuses}`);
     console.log(`redundancy reduction: ${(pct * 100).toFixed(1)}%   (target ≥ 30%)`);
-    console.log(`cross-worker reuse via brain: ${shared.reuse ? "yes" : "no"}   (target: yes)`);
-    const pass = pct >= 0.3 && shared.reuse;
-    console.log(pass ? "\n✅ milestone #1 met on live data" : `\n⚠️  not met this run — see ${OUT}`);
+    console.log(`cross-task reuse via brain: ${shared.outcome.reuses}   (target ≥ 1)`);
+    const pass = pct >= 0.3 && shared.outcome.reuses >= 1;
+    console.log(pass ? "\n✅ milestone #2 met on live data" : `\n⚠️  not met this run — see ${OUT}`);
     process.exitCode = pass ? 0 : 1;
   } finally {
     stop();

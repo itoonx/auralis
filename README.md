@@ -1,46 +1,42 @@
-# auralis — Milestone #1: "Shared brain proven" ✅
+# auralis — a coordinated agent society with a shared brain
 
-A **mozaik** agent society whose shared memory is a persistent, append-only, auditable **brain**
-instead of a disposable per-run memory. Point it at **any** codebase: two real Claude Code workers
-analyse related aspects of it, share what they learn through the brain, and skip re-exploring what a
-teammate already covered.
+Multiple **Claude Code workers** analyse a codebase as a society: a **Planner** decomposes one goal
+into a small dependency graph of subtasks, a **Conductor** walks it, each worker's findings land in a
+persistent shared **brain**, and later workers reuse them instead of re-exploring what a teammate
+already covered. A reactive **Sentry** flags overlapping work live on the bus.
 
-Example run (two workers analysing related aspects of a real codebase):
+Built on **mozaik** (the coordination substrate); the brain is our own **oracle-lite** (Bun +
+bun:sqlite FTS5, append-only). Works against **any** codebase — target repo, goal, and tasks all come
+from the environment.
 
-```
-baseline: A=11 B=8 explored, cross-worker redundant = 1   (both re-read the shared core)
-shared  : A=9  B=5 explored, cross-worker redundant = 0   (B skipped the shared core; reused A's findings)
-redundancy reduction: 100%   ·   cross-worker reuse: yes  ·   total exploration 19 -> 14
-```
+## Milestones
+- **#1 Shared brain proven** — two workers share knowledge through the brain, beating a
+  no-shared-memory baseline on redundant work.
+- **#2 Coordinated society** — a Planner-decomposed DAG + reactive coordination. Example live run
+  (3-task fleet, shared brain vs. baseline):
+  ```
+  baseline: fleet-redundant = 17, sentry overlap warnings = 17
+  shared  : fleet-redundant = 8,  sentry overlap warnings = 8, reuses = 2
+  redundancy reduction: 52.9%   ·   cross-task reuse: 2
+  ```
 
-## Project-agnostic
-Nothing is hardcoded to a project. The target repo and the two worker questions come from the
-environment (`AURALIS_PROJECT_DIR`, `AURALIS_TASK_A`, `AURALIS_TASK_B`), so the same harness runs
-against any codebase.
+## Pieces
+- `oracle-lite/server.ts` — shared brain: `POST /api/learn`, `GET /api/search`, `GET /health` (synchronous FTS -> read-after-write)
+- `src/dag.ts` — dependency-graph levels + cycle detection
+- `src/planner.ts` — decomposes a goal into a DAG (tolerant JSON parse, degrades gracefully)
+- `src/participants.ts` — `Worker`, `Auditor` + reactive `Sentry`, `MemoryLibrarian`
+- `src/conductor.ts` — `coordinate`: walk the DAG, pull-before / push-after the brain
+- `src/runner.ts` — `ClaudeCodeRunner` (Agent SDK, no API key) + `StubRunner`
+- `src/metrics.ts` — pairwise + fleet redundancy measures
+- `src/run.ts` — the live fleet harness (auto-boots the brain)
 
-## The shared brain is ours (`oracle-lite`)
-`oracle-lite/server.ts` is a minimal, API-compatible brain — Bun + `bun:sqlite` FTS5, append-only.
-The FTS write is synchronous, so a `learn` is immediately visible to a following `search`
-(read-after-write). The `MemoryAdapter` interface keeps the brain swappable.
-
-## Layout
-- `oracle-lite/server.ts` — the shared brain: `POST /api/learn`, `GET /api/search`, `GET /health`
-- `src/memory.ts` — `MemoryAdapter` + `OracleAdapter` + `NullMemoryAdapter` (baseline control)
-- `src/runner.ts` — `ClaudeCodeRunner` (drives Claude Code via the Agent SDK; no API key) + `StubRunner`
-- `src/participants.ts` — `Worker`, `Auditor` (mozaik bus + observer), `MemoryLibrarian`, `conductRun`
-- `src/metrics.ts` — the redundancy measure
-- `src/run.ts` — the live harness (auto-starts the brain; runs shared vs. baseline)
-
-## Run it
+## Run
 ```bash
-pnpm test    # 4/4 — deterministic coordination proof + live read-after-write (auto-boots oracle-lite)
-
-AURALIS_PROJECT_DIR=/path/to/any/repo pnpm dev   # live experiment over your chosen codebase
+pnpm test                                    # deterministic proof (11 tests) + live read-after-write
+AURALIS_PROJECT_DIR=/path/to/repo pnpm dev   # live fleet over your codebase
 ```
-Prereqs: Node 20+, pnpm, Bun >= 1.2, Claude Code logged in (no API key needed). Config via `.env`
-(see `.env.example`).
+Prereqs: Node 20+, pnpm, Bun >= 1.2, Claude Code logged in (no API key). Config via `.env` (see `.env.example`).
 
 ## Note
-Two workers that partition a task cleanly share only a small core, so the baseline overlap can be
-small; the reduction and reuse are directional. Choosing a task with more inherent overlap, run
-several times, gives a more robust percentage — that hardening is Milestone #2+.
+Reduction depends on task overlap and how compliantly agents reuse injected findings; the
+deterministic tests prove the mechanism, the live numbers are directional.
