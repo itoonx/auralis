@@ -2,7 +2,7 @@
 // surfaces a finding that is CONNECTED to the query's entities even when it shares no keywords — the
 // thing flat recall structurally can't do.
 import { describe, it, expect } from "vitest";
-import { extractEntities } from "../src/graph";
+import { extractEntities, entityVariants } from "../src/graph";
 import { MemoryLibrarian } from "../src/participants";
 import { NullMemoryAdapter } from "../src/memory";
 import type { MemoryAdapter, GraphEdge, SearchHit } from "../src/memory";
@@ -54,5 +54,28 @@ describe("graph retrieval into recall (M2)", () => {
   it("adds no graph block for the null (baseline) adapter", async () => {
     const { context } = await new MemoryLibrarian(new NullMemoryAdapter(), "demo").injectFor("anything");
     expect(context).not.toContain("Connected in the knowledge graph");
+  });
+});
+
+describe("entityVariants (fuzzy resolution)", () => {
+  it("expands a path to its basename and stem", () => {
+    const v = entityVariants("auth/session.ts");
+    expect(v).toContain("auth/session.ts");
+    expect(v).toContain("session.ts"); // basename
+    expect(v).toContain("session"); // stem
+  });
+});
+
+describe("fuzzy graph retrieval", () => {
+  it("connects findings that named the same entity in different forms", async () => {
+    const a = new GraphFake();
+    a.docs.push({ id: "docA", content: "The login flow lives in auth/session.ts" });
+    // docB cognified under the BASENAME form 'session.ts' (a different agent, different casing/path depth)
+    a.edges.push({ subject: "session.ts", predicate: "sets", object: "signed cookie", docId: "docB" });
+
+    const { context, hitIds } = await new MemoryLibrarian(a, "demo").injectFor("how does login work");
+    // seed 'auth/session.ts' expands to the 'session.ts' variant, matching docB's edge
+    expect(context).toContain("signed cookie");
+    expect(hitIds).toContain("docB");
   });
 });

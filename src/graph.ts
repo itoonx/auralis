@@ -71,6 +71,20 @@ export async function cognify(
   return triplets;
 }
 
+// Fuzzy entity resolution: a name's lookup variants, so `auth/session.ts`, `session.ts`, and `session`
+// resolve to the same neighborhood instead of fragmenting the graph. ponytail: deterministic path/ext
+// stripping; embedding-based resolution is the upgrade path.
+export function entityVariants(name: string): string[] {
+  const base = normalizeEntity(name);
+  const out = new Set<string>([base]);
+  const slash = base.lastIndexOf("/");
+  const basename = slash >= 0 ? base.slice(slash + 1) : base;
+  if (basename.length >= 3) out.add(basename); // path -> basename
+  const dot = basename.lastIndexOf(".");
+  if (dot > 0 && basename.slice(0, dot).length >= 3) out.add(basename.slice(0, dot)); // strip extension
+  return [...out];
+}
+
 // GRAPH_COMPLETION — graph-expand a query: find seed entities in the text, pull each one's neighborhood
 // from the brain, and format the connected findings. Surfaces what CONNECTS to what the query is about —
 // which flat keyword/vector search alone can't. No-op when the adapter has no graph, or the brain none.
@@ -90,14 +104,19 @@ export async function graphContext(
   const lines: string[] = [];
   const entities = new Set<string>();
   const docIds = new Set<string>();
+  const queried = new Set<string>();
   for (const seed of seeds) {
-    const g = await adapter.graph(seed, project);
-    for (const e of g.edges.slice(0, opts.maxEdges ?? 8)) {
-      lines.push(`${e.subject} \u2014${e.predicate}\u2192 ${e.object}`);
-      if (e.docId) docIds.add(e.docId);
-    }
     const seedKey = normalizeEntity(seed);
-    for (const ent of g.entities) if (normalizeEntity(ent) !== seedKey) entities.add(ent);
+    for (const variant of entityVariants(seed)) {
+      if (queried.has(variant)) continue;
+      queried.add(variant);
+      const g = await adapter.graph(variant, project);
+      for (const e of g.edges.slice(0, opts.maxEdges ?? 8)) {
+        lines.push(`${e.subject} \u2014${e.predicate}\u2192 ${e.object}`);
+        if (e.docId) docIds.add(e.docId);
+      }
+      for (const ent of g.entities) if (normalizeEntity(ent) !== seedKey) entities.add(ent);
+    }
   }
   const uniq = [...new Set(lines)];
   return {

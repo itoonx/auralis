@@ -16,7 +16,8 @@
     "distill": "tsx src/run-distill.ts",
     "cognify": "tsx src/run-cognify.ts",
     "recall": "tsx src/run-recall.ts",
-    "help": "tsx src/help.ts"
+    "help": "tsx src/help.ts",
+    "analyze": "tsx src/run-analyze.ts"
   },
   "keywords": [],
   "author": "",
