@@ -11,10 +11,13 @@ export function redundantCount(a: Exploration[], b: Exploration[]): number {
 }
 
 // Sum over targets of (workers-that-explored-it - 1): the redundant re-explorations across the fleet.
-export function fleetRedundantCount(exploredByWorker: Exploration[][]): number {
+// Pass `tools` to count only certain tools — e.g. new Set(["Read"]) for duplicate FILE reads (the
+// expensive kind) vs Grep/Glob discovery scans (cheap; different workers reasonably repeat globs).
+export function fleetRedundantCount(exploredByWorker: Exploration[][], tools?: Set<string>): number {
   const counts = new Map<string, number>();
   for (const explored of exploredByWorker) {
-    for (const t of new Set(explored.map((e) => e.target))) counts.set(t, (counts.get(t) ?? 0) + 1);
+    const targets = new Set(explored.filter((e) => !tools || tools.has(e.tool)).map((e) => e.target));
+    for (const t of targets) counts.set(t, (counts.get(t) ?? 0) + 1);
   }
   let redundant = 0;
   for (const c of counts.values()) if (c > 1) redundant += c - 1;

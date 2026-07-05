@@ -33,32 +33,39 @@ async function main() {
     console.log(`${nodes.length} task(s), ${buildLevels(nodes).length} level(s): ${nodes.map((n) => n.id).join(", ")}`);
     const cfg = { projectDir: PROJECT_DIR, project: PROJECT, maxTurns: MAX_TURNS, concurrency: CONCURRENCY, maxRetries: RETRIES, workerPull: WORKER_PULL, out: OUT };
 
+    // Redundancy that matters is duplicate FILE reads (expensive). Glob/grep are cheap discovery scans
+    // that different workers reasonably repeat, so split them: read-redundant is the headline the claim
+    // gate acts on; scan-redundant is a secondary note, not counted against the run.
+    const READ_ONLY = new Set(["Read"]);
+    const SCAN_ONLY = new Set(["Grep", "Glob"]);
     // The baseline is the A/B control that MEASURES the brain's value — pure overhead for a real run.
     // Prod mode (AURALIS_BASELINE=0) skips it and runs only the shared brain, roughly halving wall time.
-    let baseRed: number | undefined;
+    let baseRead: number | undefined;
     let baseWarnings = 0;
     if (RUN_BASELINE) {
       console.log("▶ baseline (no shared memory)…");
       const base = await log.time("arm.baseline", undefined, () => runFleet("baseline", new NullMemoryAdapter(), nodes, cfg));
-      baseRed = fleetRedundantCount(base.outcome.perWorker.map((w) => w.explored));
+      baseRead = fleetRedundantCount(base.outcome.perWorker.map((w) => w.explored), READ_ONLY);
       baseWarnings = base.warnings;
     }
 
     console.log(RUN_BASELINE ? "▶ shared brain…" : "▶ shared brain (prod — no baseline)…");
     const shared = await log.time("arm.shared", undefined, () => runFleet("shared", new OracleAdapter(), nodes, cfg));
-    const sharedRed = fleetRedundantCount(shared.outcome.perWorker.map((w) => w.explored));
+    const explored = shared.outcome.perWorker.map((w) => w.explored);
+    const sharedRead = fleetRedundantCount(explored, READ_ONLY);
+    const sharedScan = fleetRedundantCount(explored, SCAN_ONLY);
 
     console.log("\n─── auralis fleet run ───");
-    if (baseRed !== undefined) console.log(`baseline: fleet-redundant=${baseRed}, sentry overlap warnings=${baseWarnings}`);
-    console.log(`shared  : fleet-redundant=${sharedRed}, sentry overlap warnings=${shared.warnings}, reuses=${shared.outcome.reuses}, self-repairs=${shared.outcome.repairs}`);
+    if (baseRead !== undefined) console.log(`baseline: read-redundant=${baseRead} file(s), sentry overlap warnings=${baseWarnings}`);
+    console.log(`shared  : read-redundant=${sharedRead} file(s), scan-redundant=${sharedScan} glob/grep, sentry overlap warnings=${shared.warnings}, reuses=${shared.outcome.reuses}, self-repairs=${shared.outcome.repairs}`);
     console.log(`realtime: live-pushes=${shared.live.learns}, live-pulls=${shared.live.hits}/${shared.live.searches} hit, claims=${shared.live.claims}, prevented-dupes=${shared.live.skips}`);
-    if (baseRed !== undefined) console.log(`redundancy reduction: ${(reductionPct(baseRed, sharedRed) * 100).toFixed(1)}%   (target ≥ 30%)`);
+    if (baseRead !== undefined) console.log(`redundancy reduction (file reads): ${(reductionPct(baseRead, sharedRead) * 100).toFixed(1)}%   (target ≥ 30%)`);
     console.log("\n" + explainProvenance(shared.outcome.provenance));
 
     // Coordination "worked" if the brain was reused OR the claim gate prevented a duplicate read. With a
-    // baseline we additionally require the measured redundancy reduction to clear the bar.
+    // baseline we additionally require the measured FILE-READ redundancy reduction to clear the bar.
     const coordinated = shared.outcome.reuses >= 1 || shared.live.skips >= 1;
-    const pass = coordinated && (baseRed === undefined || reductionPct(baseRed, sharedRed) >= 0.3);
+    const pass = coordinated && (baseRead === undefined || reductionPct(baseRead, sharedRead) >= 0.3);
     console.log(pass ? "\n✅ fleet coordination met on live data" : `\n⚠️  not met this run — see ${OUT}`);
     console.log("\n" + log.summary());
     process.exitCode = pass ? 0 : 1;
