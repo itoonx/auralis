@@ -82,7 +82,7 @@ server.tool(
   {
     goal: z.string().describe("what to build, e.g. 'a rock-paper-scissors game in Node'"),
     dir: z.string().describe("the directory to build into (created if missing; kept isolated)"),
-    accept: z.enum(["rps", "todo"]).optional().describe("acceptance spec to verify against, if one fits"),
+    accept: z.enum(["rps", "todo", "restapi"]).optional().describe("acceptance spec to verify against, if one fits"),
   },
   async ({ goal, dir, accept }, extra) => {
     const projectDir = resolve(dir);

@@ -3,7 +3,7 @@
 // worker-written tests. `runAcceptance()` is importable (run.ts closes the build->accept->rework loop with
 // it); run directly, `pnpm accept` prints the report and exits 0 (PASS) / 1 (FAIL). AURALIS_ACCEPT = spec.
 import { spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -37,6 +37,33 @@ l=t.remove(l,0);assert.strictEqual(l.length,1,'removed');assert.strictEqual(l[0]
 console.log('CORE_OK');
 `;
 
+// The restapi "core" is a self-managing driver: it spawns the built server.js (argv[1]) on a private port,
+// waits for it to listen, POSTs a todo, GETs the list, asserts the item round-trips, then kills the server.
+// It manages the whole server lifecycle itself and exits, so the sync harness just waits for it — no need to
+// make runAcceptance async. Self-deadlines under the spawnSync timeout so a broken server can't leak a port.
+const REST_DRIVER = `
+const http=require('http'),{spawn}=require('child_process');
+const PORT=47901,base='http://127.0.0.1:'+PORT,deadline=Date.now()+4000;
+const srv=spawn(process.execPath,[process.argv[1]],{cwd:process.cwd(),env:{...process.env,PORT:String(PORT)},stdio:'ignore'});
+let done=false;
+const end=(code,msg)=>{if(done)return;done=true;try{srv.kill('SIGKILL')}catch(e){}if(msg)console.error(msg);process.exit(code);};
+const req=(method,path,body)=>new Promise((res,rej)=>{const d=body?JSON.stringify(body):null;
+  const r=http.request(base+path,{method,headers:d?{'content-type':'application/json','content-length':Buffer.byteLength(d)}:{}},x=>{let b='';x.on('data',c=>b+=c);x.on('end',()=>res({status:x.statusCode,body:b}));});
+  r.on('error',rej);if(d)r.write(d);r.end();});
+const waitUp=()=>new Promise((res,rej)=>{(function poll(){if(Date.now()>deadline)return rej(new Error('server did not listen within 4s'));
+  http.request(base+'/todos',{method:'GET'},()=>res()).on('error',()=>setTimeout(poll,100)).end();})();});
+(async()=>{try{
+  await waitUp();
+  const p=await req('POST','/todos',{text:'buy milk'});
+  if(p.status!==201)return end(1,'POST /todos expected 201, got '+p.status);
+  const g=await req('GET','/todos');
+  if(g.status!==200)return end(1,'GET /todos expected 200, got '+g.status);
+  let arr;try{arr=JSON.parse(g.body)}catch(e){return end(1,'GET /todos body is not JSON')}
+  if(!Array.isArray(arr)||!arr.some(t=>t&&t.text==='buy milk'))return end(1,'posted item not returned by GET');
+  console.log('CORE_OK');end(0);
+}catch(e){end(1,String(e&&e.message||e));}})();
+`;
+
 const SPECS: Record<string, Spec> = {
   rps: {
     main: "game.js",
@@ -58,6 +85,20 @@ const SPECS: Record<string, Spec> = {
         if (!crashed && /\b(win|lose|tie)\b/i.test(out)) return { ok: true };
       }
       return { ok: false, detail: "cli printed no win/lose/tie via stdin or argv" };
+    },
+  },
+  restapi: {
+    main: "server.js",
+    files: ["server.js", "router.js", "store.js"],
+    core: REST_DRIVER, // spawns server.js, POST+GET round-trip over http — the live contract
+    cli: (ws) => {
+      // Persistence check (independent of the live server): the POST from the core driver must have been
+      // written through to todos.json, so a restart would see it. store.js owns this.
+      const f = resolve(ws, "todos.json");
+      if (!existsSync(f)) return { ok: false, detail: "todos.json not written — POST did not persist" };
+      let txt = "";
+      try { txt = readFileSync(f, "utf8"); } catch { /* unreadable → fails below */ }
+      return /buy milk/.test(txt) ? { ok: true } : { ok: false, detail: "todos.json is missing the posted item" };
     },
   },
   todo: {
