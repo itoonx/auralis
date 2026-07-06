@@ -5,11 +5,11 @@
 **The coordination layer for fleets of AI coding agents — a shared, persistent brain and real-time
 coordination that make many agents work as one team instead of many amnesiacs.**
 
-Point auralis at any repository and it runs a *society* of agents that analyse it together. But the
-platform is the part **around** the agents, not the agents themselves: a **shared brain** every agent
-reads and writes, **real-time coordination** so they build on each other's work instead of colliding,
-and **runtime-agnostic seams** so the same brain serves Claude today and any other model or agent
-runtime tomorrow.
+Point auralis at a repository and a *society* of agents **analyses** it together; point it at an empty
+folder and they **build** one — the same coordination either way. But the platform is the part **around**
+the agents, not the agents themselves: a **shared brain** every agent reads and writes, **real-time
+coordination** so they build on each other's work instead of colliding, and **runtime-agnostic seams** so
+the same brain serves Claude today and any other model or agent runtime tomorrow.
 
 > **The bet:** when you run *many* agents on one codebase, the model isn't the bottleneck — the shared
 > state is. auralis is built around that bet. (Our own timing proves it: the LLM call is 99.9% of
@@ -25,6 +25,7 @@ runtime tomorrow.
   - [2 · Coordination (the society)](#2--coordination-the-society)
   - [3 · Runtime-agnostic (any model, any agent)](#3--runtime-agnostic-any-model-any-agent)
   - [4 · Observability (find the real bottleneck)](#4--observability-find-the-real-bottleneck)
+- [Build mode — the fleet writes code](#build-mode--the-fleet-writes-code)
 - [Proven on live runs](#proven-on-live-runs)
 - [Architecture](#architecture)
 - [Getting started](#getting-started)
@@ -173,6 +174,31 @@ explored, produced, and contributed. Nothing the fleet does is a black box.
 
 ---
 
+## Build mode — the fleet writes code
+
+The same coordination that keeps agents from re-reading a file keeps them from **clobbering** one. With
+`AURALIS_MODE=build`, workers get `Edit`/`Write` and the fleet *builds* a program instead of only
+describing it. Almost nothing new was needed — it's the analyse machinery with one idea flipped:
+
+- **claim-on-write.** In analyse mode the claim gate guards `Read` (dedup); in build mode it guards
+  `Write`/`Edit` (**anti-clobber**). The Planner hands each worker its own file; a write to a teammate's
+  file is denied at the tool boundary. `Read` is never blocked — a worker must read what a teammate built.
+- **Coordination = a shared contract.** The value in building isn't avoided re-reads, it's a shared
+  interface: the worker that writes `game.js` publishes `play(a,b) -> 'win'|'lose'|'tie'` to the brain, and
+  the CLI + test workers **pull** it instead of guessing.
+- **Workers write, auralis verifies.** Workers get no shell; all execution happens in an **independent
+  acceptance harness** (`pnpm accept`) that runs the built program in a sandboxed subprocess (timeout,
+  cwd-confined) and asserts its contract from fixed inputs. A worker can't pass by writing `assert(true)` —
+  the objective truth is auralis's, not the worker's.
+- **Confined.** Every write resolves inside a throwaway workspace (`.auralis-build/…`, gitignored); a write
+  escaping it is denied. This is confinement, not a true sandbox (a container/VM is the real answer, and
+  out of scope for now).
+
+Proven on real runs (§ below): built a rock-paper-scissors game **3/3** times, and — pointed at a *different*
+project — a working TODO CLI, each passing an independent acceptance check.
+
+---
+
 ## Proven on live runs
 
 Every claim below was measured on real Claude Code runs (over auralis's own codebase), not asserted. The
@@ -189,6 +215,9 @@ numbers are real but **directional** — each is from a single non-deterministic
 | **Prod mode is ~2× faster** | skip the A/B baseline arm: 398s → 219s (~45%) |
 | **Coordination overhead is negligible** | `oracle.claim` mean **2.4ms** vs `worker.run` = 99.9% of wall |
 | **The brain refines & connects** | distillation collapsed two sign-in notes into one vetted finding; graph recall pulled a `SessionToken` finding into a *login* query via a shared `auth/session.ts` node (recall 1 → 2) |
+| **Build mode is reliable** | built a working rock-paper-scissors game **3/3** runs (acceptance PASS each; baseline analyse-mode wrote **0** files) |
+| **Claim prevents clobbers** | two workers forced onto one file — claim ON: **prevented-clobbers=1**, collisions=0; claim OFF: **collisions=1** |
+| **Build mode generalises** | pointed at a *different* project it built a working TODO CLI (add/list/done/rm + persistence) — acceptance PASS, no code change |
 
 ## Architecture
 
@@ -246,6 +275,8 @@ auralis isn't tied to any one project. See [Configuration](#configuration) and `
 |---|---|
 | `pnpm analyze "<goal>"` | **the short path** — run the society once, then answer from graph-aware recall |
 | `pnpm dev` | run the coordinated fleet over a repo (baseline vs shared brain) + a "why" trail |
+| `AURALIS_MODE=build pnpm dev` | **build mode** — the fleet writes files into a workspace instead of analysing |
+| `pnpm accept` | the independent acceptance harness — run the built program and PASS/FAIL it (`AURALIS_ACCEPT=rps\|todo`) |
 
 **Run the fleet**
 | Command | What it does |
@@ -291,6 +322,13 @@ Full list + defaults in `.env.example`. The ones that matter most:
 | `AURALIS_PARALLEL=3` | run each DAG level concurrently — faster, but same-level tasks can't reuse each other |
 | `AURALIS_BASELINE=0` | **prod mode** — skip the A/B baseline arm, run only the shared brain (~2× faster) |
 
+**Build mode**
+| Variable | Effect |
+|---|---|
+| `AURALIS_MODE=build` | workers write files (`Edit`/`Write`, claim guards writes); default `analyze` is read-only |
+| `AURALIS_CLAIM=0` | turn the claim gate off while keeping the brain — the free-for-all A/B arm |
+| `AURALIS_ACCEPT` | which acceptance spec `pnpm accept` runs (`rps` \| `todo`) |
+
 **Quality (heuristic vs LLM)**
 | Variable | Effect |
 |---|---|
@@ -321,7 +359,8 @@ Full list + defaults in `.env.example`. The ones that matter most:
 | `src/distill.ts`, `src/run-distill.ts` | cluster near-duplicate findings → one vetted finding, supersede the raws |
 | `src/graph.ts`, `run-build-graph.ts`, `run-recall.ts` | build the graph from findings; graph-expanded recall |
 | `src/decision.ts`, `src/decisions.ts` | honest ADRs recorded into the brain — kept & superseded, never deleted |
-| `src/run.ts` · `run-persist.ts` · `run-values.ts` · `bench.ts` | the live demos + the benchmark |
+| `src/accept.ts` | the independent acceptance harness — runs a built program in a sandboxed subprocess and asserts its contract (`pnpm accept`) |
+| `src/run.ts` · `run-persist.ts` · `run-values.ts` · `bench.ts` | the live demos + the benchmark (build mode lives in `run.ts` + `runner.ts`) |
 
 ## Roadmap
 
@@ -331,10 +370,11 @@ Where the platform is headed. Ordered by leverage (timing tells us which knob ac
   real cost lever is *which* model runs *which* task: a small/cheap model for the Planner and easy subtasks,
   Opus reserved for hard analysis, plus a per-task turn budget. This is the one change measurement says is
   worth it.
-- **Parallel writing, not just reading** — today auralis coordinates agents that **read and analyse**.
-  Coordinated *writing* — worktrees, clean merges, no lost work — is the adjacent problem the shared-state
-  and claim machinery is built to grow into. The claim registry already generalises from "who reads this
-  file" to "who edits this file."
+- **Parallel writing beyond disjoint files** — build mode (above) already coordinates *writing* when each
+  worker owns a distinct file: the claim registry generalised from "who reads this file" to "who writes it",
+  proven on real builds. The open part is **overlapping edits** to a shared file — worktrees + clean merges,
+  or a finer-grained claim than whole-file. That, plus a real container/VM sandbox for executing generated
+  code, is the next frontier.
 - **Cross-machine fleets** — the claim policy already lives in the middle layer, so cross-process dedup
   works today. The remaining piece is a **TTL/lease** (so a worker that dies mid-run doesn't hold its claim
   forever) and true multi-machine namespacing. Deferred until a genuine multi-machine fleet exists.
@@ -347,13 +387,15 @@ Where the platform is headed. Ordered by leverage (timing tells us which knob ac
 
 - **The live numbers are directional.** Each headline figure is from a single non-deterministic run — real,
   but they'll vary with how much the tasks overlap and how faithfully the agents reuse what they're handed.
-  `pnpm bench` turns any one of them into a mean ± spread; the deterministic tests (44, in CI) pin down the
+  `pnpm bench` turns any one of them into a mean ± spread; the deterministic tests (50, in CI) pin down the
   *mechanisms*, not the magnitudes.
 - **The heuristic paths are shallow by design.** Distillation clustering, graph extraction, and the Critic
   each ship a free deterministic heuristic and an optional Claude Code path (`*_LLM=1`) for real quality.
   The heuristics keep everything offline-safe and CI-green; reach for the LLM path when the output matters.
-- **Read-and-analyse, not write — yet.** auralis coordinates reading today. Parallel writing/merges is on
-  the roadmap, not a solved claim.
+- **Build mode is proven small, not scaled.** The fleet builds working programs (rock-paper-scissors 3/3, a
+  TODO CLI) and an objective harness PASS/FAILs them — but on small, cleanly-decomposable projects with
+  disjoint files, over a handful of runs. Overlapping-file edits/merges and a true execution sandbox (v1 is
+  confinement, not a sandbox) are still ahead — see Roadmap.
 
 ---
 
