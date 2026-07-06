@@ -522,13 +522,28 @@ const server = Bun.serve({
       const tier = url.searchParams.get("tier");
       const project = url.searchParams.get("project");
       const max = Math.max(1, Math.min(500, Number(url.searchParams.get("max") ?? 200)));
-      let sql = "SELECT id, content, tier FROM docs WHERE superseded_by IS NULL";
+      // The findings UI shows the full record — source, trust, pins, usage, age — not just text.
+      let sql = `SELECT id, content, tier, source, trust, pinned, archived, times_used, retrieved_count, created_at
+                 FROM docs WHERE superseded_by IS NULL`;
       const params: any[] = [];
       if (tier) { sql += " AND tier = ?"; params.push(tier); }
       if (project) { sql += " AND project = ?"; params.push(project); }
-      sql += " LIMIT ?"; params.push(max);
+      sql += " ORDER BY created_at DESC LIMIT ?"; params.push(max);
       const rows = db.query(sql).all(...params) as any[];
-      return Response.json({ docs: rows.map((r) => ({ id: r.id, content: r.content, tier: r.tier ?? "raw" })) });
+      return Response.json({
+        docs: rows.map((r) => ({
+          id: r.id,
+          content: r.content,
+          tier: r.tier ?? "raw",
+          source: r.source ?? "",
+          trust: Number(r.trust ?? 0.5),
+          pinned: !!r.pinned,
+          archived: !!r.archived,
+          timesUsed: Number(r.times_used ?? 0),
+          retrieved: Number(r.retrieved_count ?? 0),
+          createdAt: r.created_at ?? "",
+        })),
+      });
     }
 
     // Projects that actually have data — so the dashboard can offer a picker instead of a blind text box

@@ -26,6 +26,27 @@ const KIND: Record<string, { glyph: string; cls: string }> = {
 }
 const clock = (ts?: string) => (ts ?? "").slice(11, 19) || "--:--:--"
 
+// Findings carry their provenance — badge per source family (mirrors the trust tiers at the ingress).
+function sourceBadge(source: string): { label: string; cls: string } {
+  if (source.startsWith("human")) return { label: "human", cls: "text-sky-300" }
+  if (source === "auralis:retro") return { label: "retro", cls: "text-orange-300" }
+  if (source === "auralis:decision") return { label: "decision", cls: "text-violet-300" }
+  if (source === "auralis:distilled") return { label: "distilled", cls: "text-emerald-300" }
+  if (source === "session:assistant") return { label: "assistant", cls: "text-muted-foreground" }
+  if (source.startsWith("auralis:worker")) return { label: source.replace("auralis:worker:", "worker·"), cls: "text-muted-foreground" }
+  return { label: source || "note", cls: "text-muted-foreground" }
+}
+
+function ago(iso?: string): string {
+  if (!iso) return ""
+  const s = (Date.now() - Date.parse(iso)) / 1000
+  if (!Number.isFinite(s)) return ""
+  if (s < 90) return `${Math.max(1, Math.round(s))}s ago`
+  if (s < 5400) return `${Math.round(s / 60)}m ago`
+  if (s < 129600) return `${Math.round(s / 3600)}h ago`
+  return `${Math.round(s / 86400)}d ago`
+}
+
 function Stat({ icon, label, value, sub }: { icon: ReactNode; label: string; value: ReactNode; sub?: string }) {
   return (
     <Card>
@@ -228,15 +249,30 @@ export default function App() {
                 <ScrollArea className="h-[60vh]">
                   <ul className="divide-y">
                     {docs.length === 0 && <li className="p-6 text-sm text-muted-foreground">no findings for this project yet.</li>}
-                    {docs.map((d) => (
-                      <li key={d.id} className="px-4 py-2.5">
-                        <div className="flex items-center gap-2 mb-1">
-                          {d.tier === "distilled" && <Badge className="h-4 px-1.5 text-[10px]">vetted</Badge>}
-                          <span className="font-mono text-[11px] text-muted-foreground truncate">{d.id}</span>
-                        </div>
-                        <p className="text-sm text-muted-foreground line-clamp-3">{d.content}</p>
-                      </li>
-                    ))}
+                    {docs.map((d) => {
+                      const src = sourceBadge(d.source ?? "")
+                      return (
+                        <li key={d.id} className="px-4 py-2.5">
+                          <div className="flex items-center gap-1.5 mb-1 flex-wrap">
+                            <Badge variant="secondary" className={`h-4 px-1.5 text-[10px] ${src.cls}`}>{src.label}</Badge>
+                            {d.tier === "distilled" && <Badge className="h-4 px-1.5 text-[10px]">vetted</Badge>}
+                            {d.pinned && <span title="pinned — never forgotten">📌</span>}
+                            {d.archived && <Badge variant="outline" className="h-4 px-1.5 text-[10px] text-muted-foreground">archived</Badge>}
+                            <span className="text-[10px] text-muted-foreground" title="trust prior (by source)">trust {(d.trust ?? 0.5).toFixed(2)}</span>
+                            {(d.timesUsed ?? 0) > 0 && <span className="text-[10px] text-emerald-300" title="cited as materially helpful">cited ×{d.timesUsed}</span>}
+                            {(d.retrieved ?? 0) > 0 && <span className="text-[10px] text-muted-foreground" title="times served by recall">seen ×{d.retrieved}</span>}
+                            <span className="text-[10px] text-muted-foreground ml-auto">{ago(d.createdAt)}</span>
+                          </div>
+                          <details className="group">
+                            <summary className="cursor-pointer list-none text-sm text-muted-foreground">
+                              <span className="group-open:hidden line-clamp-3">{d.content}</span>
+                              <span className="hidden group-open:block whitespace-pre-wrap text-foreground/90">{d.content}</span>
+                            </summary>
+                          </details>
+                          <div className="mt-1 font-mono text-[10px] text-muted-foreground/70 truncate">{d.id}</div>
+                        </li>
+                      )
+                    })}
                   </ul>
                 </ScrollArea>
               </CardContent>
