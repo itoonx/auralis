@@ -1,7 +1,7 @@
 // The analytical panels behind the dashboard tabs. Each fetches its own slice of the brain via usePoll
 // (stale-guarded) and refetches on the shared `tick` the parent bumps while live. Kept in one file —
 // they're small and always shipped together.
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Input } from "@/components/ui/input"
@@ -165,11 +165,27 @@ export function DecisionsPanel({ project, tick }: { project: string; tick: numbe
 export function SearchPanel({ project }: { project: string }) {
   const [q, setQ] = useState("")
   const [results, setResults] = useState<SearchResult[] | null>(null)
+  const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const req = useRef(0)
+  // Results are per-project — clear them (and invalidate any in-flight search) when the picker changes,
+  // so another project's hits never linger. Same request-id guard as usePoll; kept manual because search
+  // is user-triggered, not polled.
+  useEffect(() => { req.current++; setResults(null); setError(null); setBusy(false) }, [project])
   const run = async () => {
     if (!q.trim()) return
+    const id = ++req.current
     setBusy(true)
-    try { setResults((await search(q, project)).results) } catch { setResults([]) } finally { setBusy(false) }
+    setError(null)
+    try {
+      const r = await search(q, project)
+      if (id === req.current) setResults(r.results)
+    } catch (e) {
+      // A failed search is an error, not an empty brain — don't render it as "nothing found".
+      if (id === req.current) { setResults(null); setError((e as Error).message) }
+    } finally {
+      if (id === req.current) setBusy(false)
+    }
   }
   return (
     <Card>
@@ -179,6 +195,7 @@ export function SearchPanel({ project }: { project: string }) {
           <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="how do we authenticate users?" />
           <Button type="submit" disabled={busy}>{busy ? "…" : "search"}</Button>
         </form>
+        {error && <p className="text-sm text-destructive">can't reach oracle-lite ({error}).</p>}
         <ul className="space-y-2">
           {results?.length === 0 && <li className="text-sm text-muted-foreground">nothing in the brain for that query.</li>}
           {results?.map((r) => (
