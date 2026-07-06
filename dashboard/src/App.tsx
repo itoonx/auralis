@@ -6,6 +6,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { DecisionsPanel, GraphPanel, RunsPanel, SearchPanel, TimingPanel } from "@/components/panels"
 import { getDocs, getProjects, getStats, getTimeline, scorecard, type Finding, type ProjectInfo, type Stats, type TimelineEvent } from "@/lib/api"
 
@@ -92,17 +93,22 @@ export default function App() {
             <span className="text-muted-foreground font-normal text-sm">· brain</span>
           </div>
           <div className="flex-1" />
-          <select
+          <Select
             value={project}
-            onChange={(e) => { setProject(e.target.value); setRunSel("") }}
-            className="h-8 w-56 rounded-md border bg-background px-2 text-sm outline-none focus:ring-1 focus:ring-ring"
-            title="project (only those with data are listed)"
+            onValueChange={(v: string | null) => { setProject(v ?? ""); setRunSel("") }}
+            items={projects.map((p) => ({ value: p.project, label: `${p.project} · ${p.docs} docs${p.events ? ` · ${p.events} ev` : ""}` }))}
           >
-            {projects.length === 0 && <option value="">no projects with data</option>}
-            {projects.map((p) => (
-              <option key={p.project} value={p.project}>{p.project} · {p.docs} docs{p.events ? ` · ${p.events} ev` : ""}</option>
-            ))}
-          </select>
+            <SelectTrigger className="w-64" title="project (only those with data are listed)">
+              <SelectValue placeholder={projects.length ? "select project" : "no projects with data"} />
+            </SelectTrigger>
+            <SelectContent>
+              {projects.map((p) => (
+                <SelectItem key={p.project} value={p.project}>
+                  {p.project} <span className="text-muted-foreground">· {p.docs} docs{p.events ? ` · ${p.events} ev` : ""}</span>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <Button variant="outline" size="sm" onClick={() => setLive((v) => !v)}>
             {live ? <Pause className="size-4" /> : <Play className="size-4" />}
             {live ? "live" : "paused"}
