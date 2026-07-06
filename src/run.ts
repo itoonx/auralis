@@ -42,7 +42,7 @@ async function main() {
   const stop = await log.time("oracle.boot", undefined, () => ensureOracle());
   try {
     console.log("· resolving tasks…");
-    const nodes = await log.time("plan", undefined, () => resolveTasks(PROJECT_DIR, GOAL, PLAN_TURNS));
+    const nodes = await log.time("plan", undefined, () => resolveTasks(PROJECT_DIR, GOAL, PLAN_TURNS, BUILD));
     console.log(`${nodes.length} task(s), ${buildLevels(nodes).length} level(s): ${nodes.map((n) => n.id).join(", ")}`);
     const cfg = { projectDir: PROJECT_DIR, project: PROJECT, maxTurns: MAX_TURNS, concurrency: CONCURRENCY, maxRetries: RETRIES, workerPull: WORKER_PULL, build: BUILD, out: OUT };
 

@@ -8,7 +8,7 @@ import { oracleReachable, type MemoryAdapter } from "./memory";
 import { ClaudeCodeRunner } from "./runner";
 import { Worker, Auditor, Sentry, MemoryLibrarian } from "./participants";
 import { coordinate, type FleetOutcome } from "./conductor";
-import { planGoal } from "./planner";
+import { planGoal, planBuild } from "./planner";
 import { brainMcpServer, newLiveStats, type LiveStats } from "./brain-mcp";
 import { makeEmitter } from "./narrate";
 import type { DagNode } from "./dag";
@@ -47,7 +47,7 @@ export async function ensureOracle(): Promise<() => void> {
 
 // Fixed task set (AURALIS_TASKS = inline JSON or a file path) keeps benchmark trials comparable;
 // otherwise the Planner decomposes the goal live.
-export async function resolveTasks(projectDir: string, goal: string, planTurns: number): Promise<DagNode[]> {
+export async function resolveTasks(projectDir: string, goal: string, planTurns: number, build = false): Promise<DagNode[]> {
   const raw = process.env.AURALIS_TASKS;
   if (raw && raw.trim()) {
     const text = raw.trim().startsWith("[") ? raw : readFileSync(raw, "utf8");
@@ -61,7 +61,7 @@ export async function resolveTasks(projectDir: string, goal: string, planTurns: 
       }));
   }
   const planner = new ClaudeCodeRunner({ cwd: projectDir, maxTurns: planTurns });
-  return planGoal(planner, goal);
+  return build ? planBuild(planner, goal) : planGoal(planner, goal);
 }
 
 export interface FleetCfg {

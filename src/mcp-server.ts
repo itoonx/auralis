@@ -60,7 +60,7 @@ server.tool(
     if (!existsSync(pkg)) writeFileSync(pkg, JSON.stringify({ name: "build", private: true, type: "commonjs" }, null, 2) + "\n");
     const stop = await ensureOracle();
     try {
-      const nodes = await resolveTasks(projectDir, goal, 6);
+      const nodes = await resolveTasks(projectDir, goal, 6, true); // build-aware planner
       const { outcome } = await runFleet("mcp-build", new OracleAdapter(), nodes, {
         projectDir, project: "mcp-build", maxTurns: 15, concurrency: 3, maxRetries: 1, workerPull: true, build: true,
       });

@@ -17,9 +17,30 @@ export async function planGoal(runner: AgentRunner, goal: string): Promise<DagNo
   return parsePlan(result);
 }
 
-export function parsePlan(text: string): DagNode[] {
+// Build-aware planner: decompose a BUILD goal into file-disjoint tasks — one file per task, ordered by
+// dependency — so the claim gate can hand each worker its own file. The analyze planner (above) produced
+// exploration/synthesis tasks, which on a build goal went off-spec (meta files, missed the core file).
+export async function planBuild(runner: AgentRunner, goal: string): Promise<DagNode[]> {
+  const prompt =
+    `You are the planner for a team of agents that will BUILD (write code files for) the goal below, in the ` +
+    `current working directory. Decompose it into a small set of build tasks. RULES:\n` +
+    `- Each task OWNS exactly ONE file. Name that file in the question. Two tasks must NEVER write the same file.\n` +
+    `- If the goal names specific files, produce EXACTLY those files — no more, no fewer. Do NOT add README, ` +
+    `CONVENTIONS, config, or any extra file unless the goal explicitly asks for it.\n` +
+    `- Order by dependency: if file B requires/imports file A, B's task dependsOn A's task. Put shared/core logic first.\n` +
+    `- Each question must instruct: create and WRITE that ONE file to the current working directory, say what it ` +
+    `must contain, use plain Node with NO external dependencies, and write no other file.\n` +
+    `- Keep it minimal: the fewest files that satisfy the goal (usually a core-logic file, an entry/CLI file, a test file).\n\n` +
+    `Goal: ${goal}\n\n` +
+    `Output ONLY a JSON array, no prose:\n` +
+    `[{"id":"kebab-id","question":"Create <file>: ... . WRITE <file> to the current directory and no other file.","dependsOn":["prerequisite-ids"]}]`;
+  const { result } = await runner.run(prompt);
+  return parsePlan(result, `Implement the goal in a single Node.js file and WRITE it to the current directory: ${goal}`);
+}
+
+export function parsePlan(text: string, fallbackQuestion = "Analyse this codebase end to end. Be concise."): DagNode[] {
   const json = extractJsonArray(text);
-  const fallback: DagNode[] = [{ id: "whole", question: "Analyse this codebase end to end. Be concise.", dependsOn: [] }];
+  const fallback: DagNode[] = [{ id: "whole", question: fallbackQuestion, dependsOn: [] }];
   if (!json) return fallback;
   try {
     const arr = JSON.parse(json) as any[];
