@@ -19,7 +19,8 @@
     "analyze": "tsx src/run-analyze.ts",
     "bench-graph": "tsx src/run-bench-graph.ts",
     "build-graph": "tsx src/run-build-graph.ts",
-    "timeline": "tsx src/run-timeline.ts"
+    "timeline": "tsx src/run-timeline.ts",
+    "accept": "tsx src/accept.ts"
   },
   "keywords": [],
   "author": "",
