@@ -40,6 +40,13 @@
 
 Full list + defaults in `.env.example`. The ones that matter most:
 
+**Workers & billing**
+
+> Workers are Claude Agent SDK subprocesses. If `ANTHROPIC_API_KEY` is set in your shell they bill that
+> key (pay-as-you-go) instead of your Claude Code subscription — `unset ANTHROPIC_API_KEY` to use the
+> login. A depleted key fails workers with "Credit balance is too low"; `pnpm dev` prints which auth mode
+> workers are using at startup.
+
 **Targeting**
 | Variable | Effect |
 |---|---|
