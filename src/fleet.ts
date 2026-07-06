@@ -95,8 +95,10 @@ export async function runFleet(
     // writing the same `live` stats. The claim itself is resolved by the shared brain (adapter.claim) so
     // ownership holds across processes and any agent runtime — not just this fleet's in-process memory.
     const brain = cfg.workerPull ? brainMcpServer(adapter, cfg.project, live, emit, id) : undefined;
+    // AURALIS_CLAIM=0 turns OFF the claim gate while keeping the brain — the "free-for-all" A/B arm that
+    // shows what coordination prevents (workers can then clobber a shared file).
     const claim =
-      cfg.workerPull && adapter.claim
+      cfg.workerPull && adapter.claim && process.env.AURALIS_CLAIM !== "0"
         ? async (target: string) => {
             const r = await adapter.claim!(scope, target, id);
             if (!r.ok) {
