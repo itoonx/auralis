@@ -78,8 +78,10 @@ export default function App() {
   return (
     <div className="min-h-svh bg-background text-foreground">
       <header className="border-b sticky top-0 z-10 bg-background/80 backdrop-blur">
-        <div className="mx-auto max-w-6xl px-6 py-3 flex items-center gap-4">
-          <div className="flex items-center gap-2 font-semibold">
+        {/* Wraps on narrow screens: brand + controls stay on row one, the project picker drops to its own
+            full-width row (it's the primary scoping control — truncating it to a sliver would be worse). */}
+        <div className="mx-auto max-w-6xl px-4 sm:px-6 py-3 flex flex-wrap items-center gap-x-3 gap-y-2 sm:gap-x-4">
+          <div className="flex items-center gap-2 font-semibold shrink-0">
             <Activity className="size-5 text-primary" /> auralis
             <span className="text-muted-foreground font-normal text-sm">· brain</span>
           </div>
@@ -89,7 +91,7 @@ export default function App() {
             onValueChange={(v: string | null) => { setProject(v ?? ""); setRunSel("") }}
             items={projects.map((p) => ({ value: p.project, label: `${p.project} · ${p.docs} docs${p.events ? ` · ${p.events} ev` : ""}` }))}
           >
-            <SelectTrigger className="w-64" title="project (only those with data are listed)">
+            <SelectTrigger className="order-last w-full sm:order-none sm:w-64" title="project (only those with data are listed)">
               <SelectValue placeholder={projects.length ? "select project" : "no projects with data"} />
             </SelectTrigger>
             <SelectContent>
@@ -110,7 +112,7 @@ export default function App() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-6xl p-6 space-y-6">
+      <main className="mx-auto max-w-6xl p-4 sm:p-6 space-y-6">
         {error && (
           <Card className="border-destructive/50">
             <CardContent className="py-3 text-sm text-destructive">
@@ -127,7 +129,8 @@ export default function App() {
         </div>
 
         <Tabs defaultValue="activity" className="space-y-4">
-          <TabsList>
+          {/* Six triggers don't fit a phone; scroll the bar instead of wrapping it (single-row nav). */}
+          <TabsList className="max-w-full justify-start overflow-x-auto">
             <TabsTrigger value="activity">Activity</TabsTrigger>
             <TabsTrigger value="timing">Timing</TabsTrigger>
             <TabsTrigger value="runs">Runs</TabsTrigger>
@@ -144,7 +147,7 @@ export default function App() {
                     Activity Timeline
                     {updatedAt && <span className="text-xs font-normal text-muted-foreground">updated {updatedAt}</span>}
                   </CardTitle>
-                  <div className="flex items-center gap-1.5 text-xs">
+                  <div className="flex items-center gap-1.5 text-xs flex-wrap">
                     <Badge variant="secondary">{sc.tasks} tasks</Badge>
                     <Badge variant="secondary" className="text-amber-400">deduped {sc.deduped}</Badge>
                     <Badge variant="secondary" className="text-red-400">overlaps {sc.overlaps}</Badge>
@@ -153,7 +156,7 @@ export default function App() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <span className="font-mono truncate">{runId || "—"}</span>
+                  <span className="font-mono truncate min-w-0">{runId || "—"}</span>
                   {runSel && <button className="text-primary underline" onClick={() => setRunSel("")}>back to latest</button>}
                 </div>
               </CardHeader>
