@@ -9,6 +9,7 @@ import { ensureOracle, resolveTasks, runFleet } from "./fleet";
 import { explainProvenance } from "./audit";
 import { buildLevels } from "./dag";
 import { fleetRedundantCount, reductionPct } from "./metrics";
+import { runAcceptance, type AcceptResult } from "./accept";
 import { log } from "./log";
 
 const PROJECT_DIR = resolve(process.env.AURALIS_PROJECT_DIR ?? process.cwd());
@@ -21,6 +22,8 @@ const RETRIES = Number(process.env.AURALIS_RETRIES ?? 1); // self-repair retries
 const WORKER_PULL = process.env.AURALIS_WORKER_PULL !== "0"; // workers read/write the brain live, mid-task (real-time sharing); =0 to opt out
 const RUN_BASELINE = process.env.AURALIS_BASELINE !== "0"; // prod mode (=0): skip the baseline A/B arm — run only the shared brain
 const BUILD = (process.env.AURALIS_MODE ?? "analyze") === "build"; // build: workers WRITE files (claim guards writes); else read-only analyse
+const ACCEPT = process.env.AURALIS_ACCEPT; // build: close the loop — validate against this spec (rps|todo)
+const REWORK = Number(process.env.AURALIS_BUILD_RETRIES ?? 1); // extra fleet reworks when acceptance FAILS
 const GOAL =
   process.env.AURALIS_GOAL ??
   "Understand this codebase end-to-end: its architecture, core modules, primary end-to-end flow, and error handling.";
@@ -61,7 +64,18 @@ async function main() {
     }
 
     console.log(RUN_BASELINE ? "▶ shared brain…" : "▶ shared brain (prod — no baseline)…");
-    const shared = await log.time("arm.shared", undefined, () => runFleet("shared", new OracleAdapter(), nodes, cfg));
+    const oracle = new OracleAdapter();
+    let shared = await log.time("arm.shared", undefined, () => runFleet("shared", oracle, nodes, cfg));
+    // Close the loop: in build mode with a spec, validate the built program and — on FAIL — rework the fleet
+    // with the failure as feedback, up to AURALIS_BUILD_RETRIES. (analyse mode / no spec: run once.)
+    let acc: AcceptResult | undefined = BUILD && ACCEPT ? runAcceptance(PROJECT_DIR, ACCEPT) : undefined;
+    for (let attempt = 1; acc && !acc.pass && attempt <= REWORK; attempt++) {
+      console.log(`\n↻ acceptance FAILED — rework ${attempt}/${REWORK}:\n${acc.failLines}`);
+      const fb = `\n\nA PRIOR ATTEMPT FAILED the acceptance check:\n${acc.failLines}\nRead the existing files in this directory and CHANGE only what is needed to make it pass; do not rewrite files that already work.`;
+      const reworkNodes = nodes.map((n) => ({ ...n, question: n.question + fb }));
+      shared = await log.time("arm.shared", `rework${attempt}`, () => runFleet("shared", oracle, reworkNodes, cfg));
+      acc = runAcceptance(PROJECT_DIR, ACCEPT);
+    }
     const explored = shared.outcome.perWorker.map((w) => w.explored);
     const sharedRead = fleetRedundantCount(explored, READ_ONLY);
     const sharedScan = fleetRedundantCount(explored, SCAN_ONLY);
@@ -72,6 +86,7 @@ async function main() {
     console.log(`realtime: live-pushes=${shared.live.learns}, live-pulls=${shared.live.hits}/${shared.live.searches} hit, claims=${shared.live.claims}, prevented-dupes=${shared.live.skips}`);
     const written = [...new Set(explored.flat().filter((e) => WRITE_ONLY.has(e.tool)).map((e) => e.target))];
     if (BUILD) console.log(`build   : files-written=${written.length} [${written.join(", ")}], write-collisions=${fleetRedundantCount(explored, WRITE_ONLY)}, prevented-clobbers=${shared.live.skips}`);
+    if (BUILD && acc) console.log(`accept  : ${acc.pass ? "✅ PASS" : `❌ FAIL after ${REWORK} rework(s)`}${acc.pass ? "" : ` — ${acc.failLines.replace(/\n/g, "; ")}`}`);
     if (baseRead !== undefined) console.log(`redundancy reduction (file reads): ${(reductionPct(baseRead, sharedRead) * 100).toFixed(1)}%   (target ≥ 30%)`);
     console.log("\n" + explainProvenance(shared.outcome.provenance));
 
@@ -80,8 +95,18 @@ async function main() {
     const coordinated = shared.outcome.reuses >= 1 || shared.live.skips >= 1;
     // Build mode's real verdict is the acceptance harness (Phase 2, `pnpm accept`); here the fleet-level
     // signal is simply "did the workers actually write files" (Phase 0 baseline wrote zero).
-    const pass = BUILD ? written.length >= 1 : coordinated && (baseRead === undefined || reductionPct(baseRead, sharedRead) >= 0.3);
-    console.log(pass ? (BUILD ? `\n✅ fleet wrote ${written.length} file(s) — run \`pnpm accept\` to verify the game` : "\n✅ fleet coordination met on live data") : `\n⚠️  not met this run — see ${OUT}`);
+    const pass = BUILD ? (acc ? acc.pass : written.length >= 1) : coordinated && (baseRead === undefined || reductionPct(baseRead, sharedRead) >= 0.3);
+    console.log(
+      pass
+        ? BUILD
+          ? acc
+            ? "\n✅ built & verified — acceptance PASS"
+            : `\n✅ fleet wrote ${written.length} file(s) — run \`pnpm accept\` to verify`
+          : "\n✅ fleet coordination met on live data"
+        : BUILD && acc
+          ? `\n❌ acceptance FAILED after ${REWORK} rework(s) — see ${OUT}`
+          : `\n⚠️  not met this run — see ${OUT}`,
+    );
     console.log("\n" + log.summary());
     process.exitCode = pass ? 0 : 1;
   } finally {

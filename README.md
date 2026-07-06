@@ -327,7 +327,8 @@ Full list + defaults in `.env.example`. The ones that matter most:
 |---|---|
 | `AURALIS_MODE=build` | workers write files (`Edit`/`Write`, claim guards writes); default `analyze` is read-only |
 | `AURALIS_CLAIM=0` | turn the claim gate off while keeping the brain — the free-for-all A/B arm |
-| `AURALIS_ACCEPT` | which acceptance spec `pnpm accept` runs (`rps` \| `todo`) |
+| `AURALIS_ACCEPT` | the acceptance spec (`rps` \| `todo`); set it in build mode to **close the loop** — `pnpm dev` validates the output and reworks on FAIL |
+| `AURALIS_BUILD_RETRIES` | extra fleet reworks when acceptance fails (default 1) |
 
 **Quality (heuristic vs LLM)**
 | Variable | Effect |
