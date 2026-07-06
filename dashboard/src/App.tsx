@@ -19,6 +19,9 @@ const KIND: Record<string, { glyph: string; cls: string }> = {
   dedup: { glyph: "⇄", cls: "text-amber-400" },
   overlap: { glyph: "⚠", cls: "text-red-400" },
   repair: { glyph: "↻", cls: "text-orange-400" },
+  // Session capture (hooks/session-capture.mjs): what the human asked, and what Claude Code wrote.
+  prompt: { glyph: "🗣", cls: "text-sky-400" },
+  trace: { glyph: "✎", cls: "text-muted-foreground" },
 }
 const clock = (ts?: string) => (ts ?? "").slice(11, 19) || "--:--:--"
 
