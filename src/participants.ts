@@ -28,11 +28,23 @@ export class Worker extends BaseParticipant {
     // mid-task. That's what turns once-at-start injection into real-time sharing: a sibling running RIGHT
     // NOW commits a finding and this worker sees it on its next search, instead of only at the next level.
     private readonly livePull = false,
+    // build = write mode: the worker builds (writes) its owned file instead of only analysing.
+    private readonly build = false,
   ) {
     super();
   }
 
   private buildPrompt(question: string, injectedContext: string): string {
+    const seedCtx = injectedContext ? `\n\nAlready in the shared brain when you started:\n${injectedContext}` : "";
+    if (this.build) {
+      return (
+        `You are worker "${this.id}", BUILDING part of a program as a team working AT THE SAME TIME. You OWN exactly one file; teammates own the others.\n` +
+        `• First call mcp__oracle__search to pull any interface/contract a teammate already published, so your code matches theirs exactly.\n` +
+        `• WRITE your assigned file to disk with the Write tool — plain Node, no dependencies, no external packages. Writing a file a teammate owns is BLOCKED, so build only your own.\n` +
+        `• The MOMENT your file exposes something others depend on, call mcp__oracle__learn to publish the exact interface (e.g. "game.js exports play(a,b) -> win|lose|tie").\n` +
+        `You are done only once your file is actually written to disk.${seedCtx}\n\n---\nYour task: ${question}`
+      );
+    }
     if (this.livePull) {
       const seed = injectedContext ? `\n\nAlready in the shared brain when you started:\n${injectedContext}` : "";
       return (

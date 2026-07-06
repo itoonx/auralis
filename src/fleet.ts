@@ -68,6 +68,7 @@ export interface FleetCfg {
   concurrency: number;
   maxRetries?: number; // self-repair retries per task (0 = off)
   workerPull?: boolean; // attach the brain as an MCP tool the worker can call directly
+  build?: boolean; // build mode: workers write files (Edit/Write), claim guards writes; off = read-only analyse
   out?: string; // when set, write trace + provenance files
 }
 
@@ -105,7 +106,7 @@ export async function runFleet(
             return r;
           }
         : undefined;
-    const w = new Worker(id, env, new ClaudeCodeRunner({ cwd: cfg.projectDir, maxTurns: cfg.maxTurns, brain, claim }), !!brain);
+    const w = new Worker(id, env, new ClaudeCodeRunner({ cwd: cfg.projectDir, maxTurns: cfg.maxTurns, brain, claim, build: cfg.build }), !!brain, cfg.build);
     w.join(env);
     return w;
   };
