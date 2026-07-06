@@ -43,6 +43,7 @@ export class Worker extends BaseParticipant {
         `• WRITE your assigned file to disk with the Write tool — plain Node, no dependencies, no external packages. Writing a file a teammate owns is BLOCKED, so build only your own.\n` +
         `• You have NO shell: do NOT run Bash or try to execute, run, or test your code — you can't, and it wastes turns. Just WRITE correct code; auralis runs the checks for you.\n` +
         `• The MOMENT your file exposes something others depend on, call mcp__oracle__learn to publish the exact interface (e.g. "game.js exports play(a,b) -> win|lose|tie").\n` +
+        `• If you CHOOSE between real alternatives (data structure, protocol, library approach), record it with mcp__oracle__decide — include what you rejected and why.\n` +
         `You are done only once your file is actually written to disk.${seedCtx}\n\n---\nYour task: ${question}`
       );
     }
@@ -52,6 +53,7 @@ export class Worker extends BaseParticipant {
         `You are worker "${this.id}", analysing a codebase as part of a team working AT THE SAME TIME. Files are auto-assigned so two teammates never read the same one:\n` +
         `• If a Read is BLOCKED because a teammate already owns that file, do NOT retry it — call mcp__oracle__search for that file and reuse their finding instead.\n` +
         `• The MOMENT you learn something worth sharing, call mcp__oracle__learn with it — don't wait until the end, or teammates in flight will miss it.\n` +
+        `• If you CHOOSE between real alternatives while answering, record it with mcp__oracle__decide (include the rejected options and why).\n` +
         `Only explore what is genuinely new after checking the brain.${seed}\n\n---\nYour task: ${question}`
       );
     }
