@@ -4,7 +4,7 @@
 import { AgenticEnvironment, BaseParticipant, sendMessage } from "@mozaik-ai/core";
 import type { AgentRunner, RunResult, Exploration } from "./runner";
 import type { MemoryAdapter } from "./memory";
-import { buildGraph, graphContext } from "./graph";
+import { graphContext } from "./graph";
 import { log } from "./log";
 import type { Emit } from "./narrate";
 
@@ -155,10 +155,8 @@ export class MemoryLibrarian {
       source: `auralis:worker:${workerId}`,
     });
     if (id) this.learnedIds.push(id);
-    // Graph memory (opt-in, best-effort): turn the finding into entity/relationship edges. Never breaks capture.
-    if (id && process.env.AURALIS_BUILD_GRAPH === "1") {
-      try { await log.time("graph.build", workerId, () => buildGraph(this.adapter, id, this.project, res.result)); } catch { /* graph is best-effort */ }
-    }
+    // Graph memory needs no client-side step anymore: oracle-lite builds heuristic edges AT THE INGRESS
+    // for every learn (idempotent — unique edge index). LLM predicate refinement stays a batch job.
     return id;
   }
 }

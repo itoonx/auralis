@@ -7,6 +7,7 @@
 import { Database } from "bun:sqlite";
 import { mkdirSync } from "node:fs";
 import { resolveClaim } from "../src/claim";
+import { extractTriplets } from "../src/triplets";
 import { rrf, trustOf, boost, daysBetween, strength, pinnedOf, ARCHIVE_FLOOR } from "./rank";
 
 const PORT = Number(process.env.ORACLE_PORT ?? 47778);
@@ -53,6 +54,14 @@ db.run(`CREATE TABLE IF NOT EXISTS edges (
   id INTEGER PRIMARY KEY AUTOINCREMENT, subject TEXT, predicate TEXT, object TEXT,
   subj_key TEXT, obj_key TEXT, doc_id TEXT, project TEXT, created_at TEXT
 );`);
+// Idempotent graph builds: the same fact from the same doc is one edge, ever — so re-running build-graph
+// (or the learn-time build below racing a client-side one) can't inflate the graph. One-time migration
+// drops any duplicates that predate the index; COALESCE because NULLs never collide in SQLite UNIQUE.
+db.run(`DELETE FROM edges WHERE id NOT IN (
+  SELECT MIN(id) FROM edges GROUP BY COALESCE(project,''), subj_key, predicate, obj_key, COALESCE(doc_id,'')
+);`);
+db.run(`CREATE UNIQUE INDEX IF NOT EXISTS edges_uniq
+  ON edges (COALESCE(project,''), subj_key, predicate, obj_key, COALESCE(doc_id,''));`);
 // Activity timeline: one narrated event per coordination moment (intent/finding/dedup/overlap/…). Append-
 // only like everything here (no delete route). seq = server-assigned order so same-ms events stay stable;
 // node_id/parent_node carry the DAG so the causal tree reconstructs without any agent bookkeeping.
@@ -70,7 +79,7 @@ const getDocStmt = db.query("SELECT id, content, source, superseded_by, project,
 // recency boost (MemoryBank-style reinforcement). times_used is NOT bumped here — usage counts citations
 // only (U3), never retrievals, or ranking self-reinforces its own winners (Memoria's documented mistake).
 const touchStmt = db.query("UPDATE docs SET retrieved_count = retrieved_count + 1, last_accessed_at = ? WHERE id = ?");
-const insEdge = db.query("INSERT INTO edges (subject, predicate, object, subj_key, obj_key, doc_id, project, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+const insEdge = db.query("INSERT OR IGNORE INTO edges (subject, predicate, object, subj_key, obj_key, doc_id, project, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
 const insEvent = db.query("INSERT INTO events (run_id, project, kind, actor, human, node_id, parent_node, refs, ts) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING seq");
 const edgeCountStmt = db.query("SELECT COUNT(*) AS c FROM edges");
 const nodeCountStmt = db.query("SELECT COUNT(*) AS c FROM (SELECT subj_key AS k FROM edges UNION SELECT obj_key FROM edges)");
@@ -295,7 +304,20 @@ const server = Bun.serve({
       insDoc.run(id, pattern, concepts, body?.project ?? null, source, new Date().toISOString(), body?.tier === "distilled" ? "distilled" : "raw", trustOf(source), pinned ? 1 : 0);
       insFts.run(id, pattern, concepts); // synchronous -> immediately searchable
       await vectorAdd(id, pattern);
-      return Response.json({ success: true, id, embedding: vectorsOn ? embedder : "fts-only" });
+      // Incremental graph AT THE INGRESS: every learn extracts heuristic triplets (pure, ~8.5ms measured,
+      // no LLM in the write path) so the graph grows with the brain no matter which client wrote — fleet,
+      // session hook, MCP, retro. Never a rebuild: entity keys make new edges join existing nodes, and the
+      // unique index makes any re-extraction idempotent. LLM predicate refinement stays a batch job
+      // (pnpm build-graph / analyze). ORACLE_GRAPH=0 opts out.
+      let edges = 0;
+      if (process.env.ORACLE_GRAPH !== "0") {
+        const now = new Date().toISOString();
+        for (const t of extractTriplets(pattern)) {
+          insEdge.run(t.subject, t.predicate, t.object, normKey(t.subject), normKey(t.object), id, body?.project ?? null, now);
+          edges++;
+        }
+      }
+      return Response.json({ success: true, id, edges, embedding: vectorsOn ? embedder : "fts-only" });
     }
 
     // Graph edges from a finding (posted by the buildGraph step, separate from learn so slow/optional

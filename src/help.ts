@@ -54,7 +54,7 @@ ${setting("AURALIS_BASELINE=1", "re-measure mode — also run the no-brain A/B b
 ${setting("AURALIS_QUIET=1", "silence the live step narration on stderr (MCP progress still flows)")}
 ${setting("AURALIS_LOG_TIMING=1", "stream each timing span to stderr; the TIMING summary prints either way")}
 ${setting("AURALIS_TIMELINE=0", "opt out of the activity timeline (default on when a brain is present)")}
-${setting("AURALIS_BUILD_GRAPH=1", "build the graph on ingest during pnpm dev")}
+${setting("ORACLE_GRAPH=0", "opt OUT of the automatic heuristic graph the brain builds on every learn")}
 ${setting("AURALIS_BUILD_GRAPH_LLM", "real predicates via Claude Code — ON by default; =0 for heuristic")}
 ${setting("AURALIS_DISTILL_LLM=1", "distill with Claude Code for real merges (costs)")}
 

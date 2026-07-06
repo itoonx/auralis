@@ -19,6 +19,24 @@ describe("Oracle read-after-write (needs sidecar at :47778)", () => {
     expect(hits.some((h) => h.content.includes(marker))).toBe(true);
   }, 60_000);
 
+  it("learn builds the graph at the ingress, idempotently (auto heuristic edges)", async () => {
+    if (!(await oracleReachable())) {
+      console.warn("Oracle not reachable — skipping ingress-graph test.");
+      return;
+    }
+    const oracle = new OracleAdapter();
+    const project = "ig-" + Math.random().toString(36).slice(2, 8);
+    const text = "The `PaymentGateway` retries via gateway/retry.ts and logs to audit/log.ts on failure.";
+    await oracle.learn(text, { project });
+    const g1 = await oracle.graph!("PaymentGateway", project);
+    expect(g1.edges.length).toBeGreaterThanOrEqual(2); // hub linked to both files — no client-side step
+    // Re-relating the same triplets must not inflate the graph (unique edge index → INSERT OR IGNORE).
+    const docId = g1.edges[0].docId!;
+    await oracle.relate!(docId, project, g1.edges.map(({ subject, predicate, object }) => ({ subject, predicate, object })));
+    const g2 = await oracle.graph!("PaymentGateway", project);
+    expect(g2.edges.length).toBe(g1.edges.length);
+  }, 60_000);
+
   it("timeline records events and replays them in seq order", async () => {
     if (!(await oracleReachable())) {
       console.warn("Oracle not reachable at :47778 — skipping live timeline test.");

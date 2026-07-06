@@ -75,8 +75,8 @@ Full list + defaults in `.env.example`. The ones that matter most:
 | Variable | Effect |
 |---|---|
 | `AURALIS_SEMANTIC=1` | real sentence-embedding recall (starts the embed sidecar) |
-| `AURALIS_BUILD_GRAPH` | build the graph on ingest during `pnpm dev` |
-| `AURALIS_BUILD_GRAPH_LLM` | real predicates via Claude Code — **on by default**; `=0` for the free heuristic |
+| `ORACLE_GRAPH=0` | opt OUT of the automatic heuristic graph — the brain builds edges **on every learn** by default (incremental, idempotent, no LLM) |
+| `AURALIS_BUILD_GRAPH_LLM` | real predicates via Claude Code for the **batch refinement** (`pnpm build-graph` / `pnpm analyze`) — **on by default**; `=0` for the free heuristic |
 | `AURALIS_DISTILL_LLM=1` | distill with Claude Code for real merges (costs) |
 
 **Observability**
