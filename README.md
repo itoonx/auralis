@@ -282,9 +282,11 @@ Your session then gets two tools:
 
 The tool call boots the brain and runs a real fleet, which drives its own Claude workers via the Agent SDK
 (reusing your login) — so it's Claude calling auralis calling Claude, and it works: proven on a live run
-from a real `claude` CLI — `analyze` returned in **49s**, and a planner-driven `build` produced a game that
-passed acceptance in **~3 min**. Caveats: a `build` runs ~3 min, so set a longer MCP tool timeout
-(`MCP_TOOL_TIMEOUT=600000`) or it may be cut off; its workers bill your account; oracle-lite uses port 47778.
+from a real `claude` CLI (`analyze` returned a real answer in 49s). Long calls stay alive: the tools stream
+the live timeline plus a heartbeat as MCP **progress notifications**, so a client that resets its timeout on
+progress won't cut them off — a build survived a 60s base timeout in testing, no `MCP_TOOL_TIMEOUT` needed.
+The `build` tool also **reworks** on acceptance failure (same closed loop as the CLI). Caveats: a build runs
+several minutes and its workers bill your account; oracle-lite uses port 47778.
 
 ## Command reference
 

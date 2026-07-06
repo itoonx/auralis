@@ -9,7 +9,7 @@ import { ensureOracle, resolveTasks, runFleet } from "./fleet";
 import { explainProvenance } from "./audit";
 import { buildLevels } from "./dag";
 import { fleetRedundantCount, reductionPct } from "./metrics";
-import { runAcceptance, type AcceptResult } from "./accept";
+import { buildWithRework } from "./build";
 import { log } from "./log";
 
 const PROJECT_DIR = resolve(process.env.AURALIS_PROJECT_DIR ?? process.cwd());
@@ -65,17 +65,9 @@ async function main() {
 
     console.log(RUN_BASELINE ? "▶ shared brain…" : "▶ shared brain (prod — no baseline)…");
     const oracle = new OracleAdapter();
-    let shared = await log.time("arm.shared", undefined, () => runFleet("shared", oracle, nodes, cfg));
-    // Close the loop: in build mode with a spec, validate the built program and — on FAIL — rework the fleet
-    // with the failure as feedback, up to AURALIS_BUILD_RETRIES. (analyse mode / no spec: run once.)
-    let acc: AcceptResult | undefined = BUILD && ACCEPT ? runAcceptance(PROJECT_DIR, ACCEPT) : undefined;
-    for (let attempt = 1; acc && !acc.pass && attempt <= REWORK; attempt++) {
-      console.log(`\n↻ acceptance FAILED — rework ${attempt}/${REWORK}:\n${acc.failLines}`);
-      const fb = `\n\nA PRIOR ATTEMPT FAILED the acceptance check:\n${acc.failLines}\nRead the existing files in this directory and CHANGE only what is needed to make it pass; do not rewrite files that already work.`;
-      const reworkNodes = nodes.map((n) => ({ ...n, question: n.question + fb }));
-      shared = await log.time("arm.shared", `rework${attempt}`, () => runFleet("shared", oracle, reworkNodes, cfg));
-      acc = runAcceptance(PROJECT_DIR, ACCEPT);
-    }
+    // Close the loop (shared with the MCP build tool): run the fleet, and in build mode with a spec, validate
+    // and rework on FAIL up to AURALIS_BUILD_RETRIES. analyse / no spec = one run, no rework.
+    const { shared, acc } = await buildWithRework(oracle, nodes, cfg, { accept: BUILD ? ACCEPT : undefined, retries: REWORK, projectDir: PROJECT_DIR });
     const explored = shared.outcome.perWorker.map((w) => w.explored);
     const sharedRead = fleetRedundantCount(explored, READ_ONLY);
     const sharedScan = fleetRedundantCount(explored, SCAN_ONLY);

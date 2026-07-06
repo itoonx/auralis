@@ -72,6 +72,7 @@ export interface FleetCfg {
   maxRetries?: number; // self-repair retries per task (0 = off)
   workerPull?: boolean; // attach the brain as an MCP tool the worker can call directly
   build?: boolean; // build mode: workers write files (Edit/Write), claim guards writes; off = read-only analyse
+  onProgress?: (msg: string) => void; // live sink for each coordination event (e.g. MCP progress notifications)
   out?: string; // when set, write trace + provenance files
 }
 
@@ -85,7 +86,10 @@ export async function runFleet(
   // Activity timeline: one emitter per run arm. Only when the adapter actually persists events (the shared
   // brain) — the null baseline has no recordEvent, so it emits nothing. Best-effort, never blocks the run.
   const runId = `${cfg.project}:${label}:${new Date().toISOString()}`;
-  const emit = process.env.AURALIS_TIMELINE !== "0" && adapter.recordEvent ? makeEmitter({ adapter, runId, project: cfg.project }) : undefined;
+  const emit =
+    process.env.AURALIS_TIMELINE !== "0" && adapter.recordEvent
+      ? makeEmitter({ adapter, runId, project: cfg.project, onEvent: cfg.onProgress ? (_k, _a, human) => cfg.onProgress!(human) : undefined })
+      : undefined;
   const auditor = new Auditor();
   auditor.join(env);
   const sentry = new Sentry(emit);

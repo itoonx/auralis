@@ -31,10 +31,16 @@ export type Emit = (
 
 // Bind an emitter to one run. The returned emit() is synchronous-looking: it kicks off the POST and returns
 // immediately. Failures are swallowed — the timeline is observability, never a dependency of the work.
-export function makeEmitter(ctx: { adapter: MemoryAdapter; runId: string; project: string }): Emit {
+export function makeEmitter(ctx: {
+  adapter: MemoryAdapter;
+  runId: string;
+  project: string;
+  onEvent?: (kind: string, actor: string, human: string) => void; // live sink (e.g. MCP progress notifications)
+}): Emit {
   return (kind, actor, body, opts = {}) => {
     const human = format(kind, body);
     log.event(`timeline.${kind}`, { actor, human }); // also streams to stderr under AURALIS_LOG_TIMING=1
+    ctx.onEvent?.(kind, actor, human); // best-effort live bridge; never throws into the run
     // Promise.resolve tolerates adapters without recordEvent (Null returns void) and never rejects the caller.
     Promise.resolve(
       ctx.adapter.recordEvent?.({ runId: ctx.runId, project: ctx.project, kind, actor, human, nodeId: opts.nodeId, parentNode: opts.parentNode, refs: opts.refs }),
