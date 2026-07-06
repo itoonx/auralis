@@ -281,9 +281,10 @@ Your session then gets two tools:
 - **`build`** `(goal, dir, accept?)` — a society builds a small program into `dir`, then verifies it.
 
 The tool call boots the brain and runs a real fleet, which drives its own Claude workers via the Agent SDK
-(reusing your login) — so it's Claude calling auralis calling Claude, and it works: the nesting (SDK auth,
-MCP stdio framing, re-entrancy) is proven on a live run. Caveats: a build call takes minutes and its workers
-bill your account; oracle-lite uses port 47778.
+(reusing your login) — so it's Claude calling auralis calling Claude, and it works: proven on a live run
+from a real `claude` CLI — `analyze` returned in **49s**, and a planner-driven `build` produced a game that
+passed acceptance in **~3 min**. Caveats: a `build` runs ~3 min, so set a longer MCP tool timeout
+(`MCP_TOOL_TIMEOUT=600000`) or it may be cut off; its workers bill your account; oracle-lite uses port 47778.
 
 ## Command reference
 
