@@ -31,6 +31,10 @@ const GOAL =
 
 async function main() {
   console.log(`target project: ${PROJECT_DIR}  ·  mode=${BUILD ? "build" : "analyze"}  ·  parallel=${CONCURRENCY}  ·  worker-pull=${WORKER_PULL}  ·  baseline=${RUN_BASELINE}`);
+  // Auth visibility: workers are separate Agent-SDK subprocesses. If ANTHROPIC_API_KEY is set they bill it
+  // (pay-as-you-go) — NOT your Claude Code subscription — so a depleted key gives "Credit balance is too
+  // low" mid-run. Surfaced here so it's diagnosable, not mysterious. Unset the key to use the subscription.
+  console.log(`workers auth: ${process.env.ANTHROPIC_API_KEY ? "ANTHROPIC_API_KEY (metered — a $0 balance fails workers)" : "Claude Code subscription (no API key in env)"}`);
   // Build mode: the workspace needs its OWN package.json, or Node resolves module type from auralis's
   // package.json ("type":"module") and the generated CommonJS (require/module.exports) fails to run — a
   // real edge case the first live build surfaced. Don't overwrite a project that already declares its type.
