@@ -19,9 +19,10 @@ const KIND: Record<string, { glyph: string; cls: string }> = {
   dedup: { glyph: "⇄", cls: "text-amber-400" },
   overlap: { glyph: "⚠", cls: "text-red-400" },
   repair: { glyph: "↻", cls: "text-orange-400" },
-  // Session capture (hooks/session-capture.mjs): what the human asked, and what Claude Code wrote.
+  // Session capture + worker tool steps: what the human asked, each tool action, and the answer.
   prompt: { glyph: "🗣", cls: "text-sky-400" },
-  trace: { glyph: "✎", cls: "text-muted-foreground" },
+  trace: { glyph: "»", cls: "text-muted-foreground" },
+  answer: { glyph: "✦", cls: "text-emerald-300" },
 }
 const clock = (ts?: string) => (ts ?? "").slice(11, 19) || "--:--:--"
 

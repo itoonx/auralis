@@ -101,18 +101,28 @@ const searchDeepStmt = db.query(
 // U4 sweep: archive (never delete) docs whose strength fell below the floor. Strength is computed in JS
 // from the same formula ranking uses — one source of truth in rank.ts. Runs at boot and every 24h.
 function sweepArchive(): number {
-  const rows = db.query("SELECT id, source, trust, times_used, last_accessed_at, created_at, tier FROM docs WHERE archived = 0 AND pinned = 0").all() as any[];
+  const rows = db.query("SELECT id, source, trust, times_used, last_accessed_at, created_at, tier, project FROM docs WHERE archived = 0 AND pinned = 0").all() as any[];
   const now = Date.now();
   const mark = db.query("UPDATE docs SET archived = 1 WHERE id = ?");
+  const byProject = new Map<string, number>();
   let archived = 0;
   for (const r of rows) {
     const days = daysBetween(r.last_accessed_at ?? r.created_at, now);
     if (strength(Number(r.trust ?? 0.5), Number(r.times_used ?? 0), days, String(r.tier ?? "raw")) < ARCHIVE_FLOOR) {
       mark.run(r.id);
       archived++;
+      const p = String(r.project ?? "");
+      byProject.set(p, (byProject.get(p) ?? 0) + 1);
     }
   }
-  if (archived) console.log(`· sweep: archived ${archived} faded doc(s) — deep search (include_archived=1) still reaches them`);
+  if (archived) {
+    console.log(`· sweep: archived ${archived} faded doc(s) — deep search (include_archived=1) still reaches them`);
+    // Maintenance belongs on the timeline too — forgetting is a memory event, not a silent side effect.
+    const ts = new Date().toISOString();
+    for (const [p, n] of byProject) {
+      if (p) insEvent.get("oracle:maintenance", p, "note", "oracle", `✎ sweep archived ${n} faded doc(s) — deep search still reaches them`, null, null, null, ts);
+    }
+  }
   return archived;
 }
 sweepArchive();

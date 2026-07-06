@@ -5,6 +5,11 @@
 import { query } from "@anthropic-ai/claude-agent-sdk";
 import { resolve, sep } from "node:path";
 
+// Fleet processes mark themselves so repo hooks stand down: SDK worker subprocesses inherit this env and
+// load the target repo's .claude hooks — without the mark, session-capture recorded a WORKER's prompt as a
+// human instruction at trust 1.0 (found live). Workers' own narration already flows via onStep/the timeline.
+process.env.AURALIS_FLEET = "1";
+
 export interface Exploration {
   tool: string;
   target: string;

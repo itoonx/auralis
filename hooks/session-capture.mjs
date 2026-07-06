@@ -24,9 +24,14 @@ export function route(payload) {
   const project = basename(payload?.cwd ?? "") || "session";
   const actions = [];
 
+  // Fleet workers are Claude subprocesses that inherit this repo's hooks — their prompts/answers are NOT
+  // the human's session. Found live: a worker prompt landed as a trust-1.0 "human instruction". Stand down.
+  if (process.env.AURALIS_FLEET) return actions;
+
   if (kind === "UserPromptSubmit") {
     const prompt = String(payload?.prompt ?? "").trim();
     if (!prompt || prompt.startsWith("/") || prompt.startsWith("!")) return actions; // slash/shell — not knowledge
+    if (prompt.startsWith("<")) return actions; // harness payloads (<task-notification> etc.) — not human words
     // Always on the timeline (episodic); into the brain only when substantive. Human ground truth is born
     // trust 1.0 (source prefix "human") but NOT pinned — an instruction nobody ever recalls should fade.
     actions.push({ type: "event", project, kind: "prompt", actor: "human", human: `🗣 ${clip(prompt, 200)}` });
@@ -49,8 +54,11 @@ export function route(payload) {
 
   if (kind === "Stop") {
     const text = lastAssistantText(payload?.transcript_path);
-    // Substantive answers only; born agent-tier (0.5) — credibility is earned via cite, not assumed.
-    if (text && text.length >= 120) {
+    if (!text) return actions;
+    // The timeline shows the full exchange — prompt → traces → ANSWER — so a replay reads as a story.
+    if (text.length >= 40) actions.push({ type: "event", project, kind: "answer", actor: "claude-code", human: `✦ ${clip(text, 200)}` });
+    // Into the brain only when substantive; born agent-tier (0.5) — credibility is earned via cite.
+    if (text.length >= 120) {
       actions.push({ type: "learn", project, source: "session:assistant", pinned: false, pattern: `Assistant conclusion (session): ${clip(text, 1500)}` });
     }
     return actions;
