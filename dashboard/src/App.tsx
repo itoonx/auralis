@@ -52,6 +52,7 @@ export default function App() {
   const [error, setError] = useState<string | null>(null)
   const [live, setLive] = useState(true)
   const [updatedAt, setUpdatedAt] = useState("")
+  const [showTraces, setShowTraces] = useState(false)
 
   useEffect(() => { document.documentElement.classList.add("dark") }, [])
 
@@ -87,6 +88,12 @@ export default function App() {
   }, [live])
 
   const sc = scorecard(events)
+  // Newest first — the feed must open on what just happened, not on hours-old traces. Tool-step traces are
+  // detail-on-demand: counted, hidden by default (they drown prompts/findings), one tap to show.
+  const nPrompts = events.filter((e) => e.kind === "prompt").length
+  const nAnswers = events.filter((e) => e.kind === "answer").length
+  const nTraces = events.filter((e) => e.kind === "trace").length
+  const visible = [...events].reverse().filter((e) => showTraces || e.kind !== "trace")
 
   return (
     <div className="min-h-svh bg-background text-foreground">
@@ -158,11 +165,22 @@ export default function App() {
                     {updatedAt && <span className="text-xs font-normal text-muted-foreground">updated {updatedAt}</span>}
                   </CardTitle>
                   <div className="flex items-center gap-1.5 text-xs">
-                    <Badge variant="secondary">{sc.tasks} tasks</Badge>
-                    <Badge variant="secondary" className="text-amber-400">deduped {sc.deduped}</Badge>
-                    <Badge variant="secondary" className="text-red-400">overlaps {sc.overlaps}</Badge>
-                    <Badge variant="secondary" className="text-orange-400">repairs {sc.repairs}</Badge>
-                    <Badge variant="secondary" className="text-violet-400">notes {sc.notes}</Badge>
+                    {sc.tasks > 0 && <Badge variant="secondary">{sc.tasks} tasks</Badge>}
+                    {sc.deduped > 0 && <Badge variant="secondary" className="text-amber-400">deduped {sc.deduped}</Badge>}
+                    {sc.overlaps > 0 && <Badge variant="secondary" className="text-red-400">overlaps {sc.overlaps}</Badge>}
+                    {sc.repairs > 0 && <Badge variant="secondary" className="text-orange-400">repairs {sc.repairs}</Badge>}
+                    {sc.notes > 0 && <Badge variant="secondary" className="text-violet-400">notes {sc.notes}</Badge>}
+                    {nPrompts > 0 && <Badge variant="secondary" className="text-sky-400">🗣 {nPrompts}</Badge>}
+                    {nAnswers > 0 && <Badge variant="secondary" className="text-emerald-300">✦ {nAnswers}</Badge>}
+                    {nTraces > 0 && (
+                      <button
+                        className={`rounded-md border px-2 py-0.5 ${showTraces ? "text-foreground" : "text-muted-foreground"}`}
+                        onClick={() => setShowTraces((v) => !v)}
+                        title="tool steps (Read/Write per action) — detail on demand"
+                      >
+                        » {nTraces} {showTraces ? "shown" : "hidden"}
+                      </button>
+                    )}
                   </div>
                 </div>
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -174,12 +192,12 @@ export default function App() {
               <CardContent className="p-0">
                 <ScrollArea className="h-[60vh]">
                   <ol className="divide-y">
-                    {events.length === 0 && (
+                    {visible.length === 0 && (
                       <li className="p-6 text-sm text-muted-foreground">
                         no events yet — run <code className="font-mono">pnpm dev</code> against a repo, then watch them land here.
                       </li>
                     )}
-                    {events.map((e) => {
+                    {visible.map((e) => {
                       const k = KIND[e.kind] ?? { glyph: "·", cls: "text-muted-foreground" }
                       return (
                         <li key={e.seq} className="flex items-start gap-3 px-4 py-2.5 hover:bg-muted/40">
