@@ -4,7 +4,7 @@
 import { AgenticEnvironment, BaseParticipant, sendMessage } from "@mozaik-ai/core";
 import type { AgentRunner, RunResult, Exploration } from "./runner";
 import type { MemoryAdapter } from "./memory";
-import { buildGraph, graphContext } from "./graph";
+import { graphContext } from "./graph";
 import { log } from "./log";
 import type { Emit } from "./narrate";
 
@@ -43,6 +43,7 @@ export class Worker extends BaseParticipant {
         `• WRITE your assigned file to disk with the Write tool — plain Node, no dependencies, no external packages. Writing a file a teammate owns is BLOCKED, so build only your own.\n` +
         `• You have NO shell: do NOT run Bash or try to execute, run, or test your code — you can't, and it wastes turns. Just WRITE correct code; auralis runs the checks for you.\n` +
         `• The MOMENT your file exposes something others depend on, call mcp__oracle__learn to publish the exact interface (e.g. "game.js exports play(a,b) -> win|lose|tie").\n` +
+        `• If you CHOOSE between real alternatives (data structure, protocol, library approach), record it with mcp__oracle__decide — include what you rejected and why.\n` +
         `You are done only once your file is actually written to disk.${seedCtx}\n\n---\nYour task: ${question}`
       );
     }
@@ -52,6 +53,7 @@ export class Worker extends BaseParticipant {
         `You are worker "${this.id}", analysing a codebase as part of a team working AT THE SAME TIME. Files are auto-assigned so two teammates never read the same one:\n` +
         `• If a Read is BLOCKED because a teammate already owns that file, do NOT retry it — call mcp__oracle__search for that file and reuse their finding instead.\n` +
         `• The MOMENT you learn something worth sharing, call mcp__oracle__learn with it — don't wait until the end, or teammates in flight will miss it.\n` +
+        `• If you CHOOSE between real alternatives while answering, record it with mcp__oracle__decide (include the rejected options and why).\n` +
         `Only explore what is genuinely new after checking the brain.${seed}\n\n---\nYour task: ${question}`
       );
     }
@@ -134,12 +136,17 @@ export class MemoryLibrarian {
 
   async injectFor(question: string): Promise<{ context: string; hitIds: string[] }> {
     const hits = await this.adapter.search(question, { project: this.project, limit: 5 });
-    const flat = hits.map((h) => `- ${h.content}`).join("\n");
+    // Ids are shown so the worker can CITE injected findings (P1): before this, the biggest recall path
+    // fed ZERO usage signal — reuses came from here, yet none were citable, starving the U3 boost and the
+    // U4 forgetting decisions (baseline at change time: cited/seen ratio 0.029).
+    const flat = hits.map((h) => `- [${h.id}] ${h.content}`).join("\n");
     // Graph-expand (graph-linked recall): seed from the question + top hits so recall surfaces what CONNECTS
     // to what the query is about, even with no shared keywords. No-op when the brain has no graph.
     const seedText = `${question}\n${hits.map((h) => h.content).join("\n")}`;
     const gc = await log.time("graph.expand", this.project, () => graphContext(this.adapter, this.project, seedText));
-    const context = [flat, gc.text].filter(Boolean).join("\n\n");
+    const teach = "(cite the [id] of anything above that materially helps your work: mcp__oracle__cite — only real help)";
+    const body = [flat, gc.text].filter(Boolean).join("\n\n");
+    const context = body ? `${body}\n${teach}` : "";
     const hitIds = [...new Set([...hits.map((h) => h.id).filter(Boolean), ...gc.docIds])];
     return { context, hitIds };
   }
@@ -155,10 +162,8 @@ export class MemoryLibrarian {
       source: `auralis:worker:${workerId}`,
     });
     if (id) this.learnedIds.push(id);
-    // Graph memory (opt-in, best-effort): turn the finding into entity/relationship edges. Never breaks capture.
-    if (id && process.env.AURALIS_BUILD_GRAPH === "1") {
-      try { await log.time("graph.build", workerId, () => buildGraph(this.adapter, id, this.project, res.result)); } catch { /* graph is best-effort */ }
-    }
+    // Graph memory needs no client-side step anymore: oracle-lite builds heuristic edges AT THE INGRESS
+    // for every learn (idempotent — unique edge index). LLM predicate refinement stays a batch job.
     return id;
   }
 }

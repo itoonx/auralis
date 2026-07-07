@@ -24,15 +24,20 @@ export function route(payload) {
   const project = basename(payload?.cwd ?? "") || "session";
   const actions = [];
 
+  // Fleet workers are Claude subprocesses that inherit this repo's hooks — their prompts/answers are NOT
+  // the human's session. Found live: a worker prompt landed as a trust-1.0 "human instruction". Stand down.
+  if (process.env.AURALIS_FLEET) return actions;
+
   if (kind === "UserPromptSubmit") {
     const prompt = String(payload?.prompt ?? "").trim();
     if (!prompt || prompt.startsWith("/") || prompt.startsWith("!")) return actions; // slash/shell — not knowledge
+    if (prompt.startsWith("<")) return actions; // harness payloads (<task-notification> etc.) — not human words
     // Always on the timeline (episodic); into the brain only when substantive. Human ground truth is born
     // trust 1.0 (source prefix "human") but NOT pinned — an instruction nobody ever recalls should fade.
     actions.push({ type: "event", project, kind: "prompt", actor: "human", human: `🗣 ${clip(prompt, 200)}` });
     actions.push({ type: "recall", project, query: prompt }); // BEFORE learn — don't echo this prompt back at itself
     if (prompt.length >= 80) {
-      actions.push({ type: "learn", project, source: "human:prompt", pinned: false, pattern: `User instruction (session): ${clip(prompt, 1200)}` });
+      actions.push(...learnChunks(project, "human:prompt", "User instruction (session): ", prompt));
     }
     return actions;
   }
@@ -49,9 +54,12 @@ export function route(payload) {
 
   if (kind === "Stop") {
     const text = lastAssistantText(payload?.transcript_path);
-    // Substantive answers only; born agent-tier (0.5) — credibility is earned via cite, not assumed.
-    if (text && text.length >= 120) {
-      actions.push({ type: "learn", project, source: "session:assistant", pinned: false, pattern: `Assistant conclusion (session): ${clip(text, 1500)}` });
+    if (!text) return actions;
+    // The timeline shows the full exchange — prompt → traces → ANSWER — so a replay reads as a story.
+    if (text.length >= 40) actions.push({ type: "event", project, kind: "answer", actor: "claude-code", human: `✦ ${clip(text, 200)}` });
+    // Into the brain only when substantive; born agent-tier (0.5) — credibility is earned via cite.
+    if (text.length >= 120) {
+      actions.push(...learnChunks(project, "session:assistant", "Assistant conclusion (session): ", text));
     }
     return actions;
   }
@@ -60,6 +68,38 @@ export function route(payload) {
 }
 
 const clip = (s, n) => s.replace(/\s+/g, " ").trim().slice(0, n);
+
+// A memory unit is a unit of thought, not a turn (LongMemEval diagnosis, 58%→76%): clip() at write time
+// threw away everything past the cut — unrecoverable in an append-only store. Long text splits at
+// sentence boundaries instead; nothing is lost, and each chunk fits whole in a recall excerpt.
+export function chunkTurn(text, max = 600) {
+  if (text.length <= max) return [text];
+  const sentences = text.split(/(?<=[.!?\n])\s+/).filter(Boolean);
+  const chunks = [];
+  let cur = "";
+  for (const s of sentences) {
+    if (cur && cur.length + s.length + 1 > max) {
+      chunks.push(cur);
+      cur = s;
+    } else {
+      cur = cur ? `${cur} ${s}` : s;
+    }
+  }
+  if (cur) chunks.push(cur);
+  return chunks;
+}
+
+// Learn actions for one lane: chunk, then give continuation chunks a [re: …] anchor — a mid-list chunk
+// ("7. Transcriptionist…") loses the topic words that make it findable without one.
+function learnChunks(project, source, prefix, text) {
+  const t = text.trim().slice(0, 6000); // ponytail: 6k ceiling, raise if a real conclusion outgrows it
+  const chunks = chunkTurn(t).map((c) => clip(c, 600));
+  const anchor = chunks.length > 1 ? chunks[0].slice(0, 80).replace(/\s+\S*$/, "") : "";
+  return chunks.map((c, i) => ({
+    type: "learn", project, source, pinned: false,
+    pattern: i === 0 ? `${prefix}${c}` : `${prefix}[re: ${anchor}…] ${c}`,
+  }));
+}
 
 // Last assistant text from the session transcript (JSONL). Tolerant: any failure → null, capture skipped.
 function lastAssistantText(path) {
@@ -108,9 +148,17 @@ async function recall(project, query) {
   }
 }
 
+// When installed globally (~/.claude/settings.json) AND the repo wires this hook itself, both copies
+// fire on every event — the global one stands down or every prompt in this repo lands twice.
+export function isDuplicateInstall(hookPath, cwd, readSettings) {
+  if (!cwd || hookPath.startsWith(cwd)) return false; // repo-local install: always runs
+  try { return readSettings(`${cwd}/.claude/settings.json`).includes("session-capture"); } catch { return false; }
+}
+
 async function main() {
   let payload = {};
   try { payload = JSON.parse(readFileSync(0, "utf8")); } catch { /* no stdin — nothing to do */ }
+  if (isDuplicateInstall(process.argv[1] ?? "", payload?.cwd ?? "", (p) => readFileSync(p, "utf8"))) process.exit(0);
   const actions = route(payload);
   let context = null;
   for (const a of actions) {

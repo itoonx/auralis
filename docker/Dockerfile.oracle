@@ -9,9 +9,10 @@ WORKDIR /app
 RUN echo '{"name":"oracle-lite-image","private":true,"dependencies":{"@lancedb/lancedb":"^0.31.0"}}' > package.json \
     && bun install --production
 
-# The server + the two repo-relative imports it uses (../src/claim, ./rank).
+# The server + its repo-relative imports (../src/claim, ../src/triplets, ./rank) — all pure, no deps.
 COPY oracle-lite/ oracle-lite/
 COPY src/claim.ts src/claim.ts
+COPY src/triplets.ts src/triplets.ts
 
 # The brain lives on a bind mount (compose) so it survives rebuilds and stays greppable from the host.
 VOLUME ["/app/.auralis-out"]

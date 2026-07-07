@@ -9,6 +9,7 @@ import { oracleReachable, type MemoryAdapter } from "./memory";
 import { ClaudeCodeRunner } from "./runner";
 import { Worker, Auditor, Sentry, MemoryLibrarian } from "./participants";
 import { coordinate, type FleetOutcome } from "./conductor";
+import { buildLevels } from "./dag";
 import { planGoal, planBuild } from "./planner";
 import { brainMcpServer, newLiveStats, type LiveStats } from "./brain-mcp";
 import { makeEmitter, format } from "./narrate";
@@ -99,7 +100,7 @@ export async function runFleet(
   adapter: MemoryAdapter,
   nodes: DagNode[],
   cfg: FleetCfg,
-): Promise<{ outcome: FleetOutcome; warnings: number; live: LiveStats }> {
+): Promise<{ outcome: FleetOutcome; warnings: number; live: LiveStats; runId: string }> {
   const env = new AgenticEnvironment();
   // Activity timeline: one emitter per run arm. Only when the adapter actually persists events (the shared
   // brain) — the null baseline has no recordEvent, so it emits nothing. Best-effort, never blocks the run.
@@ -115,6 +116,9 @@ export async function runFleet(
   const live = newLiveStats();
   const scope = `${cfg.project}:${label}`; // claims are namespaced per run arm so arms/reruns don't collide
   if (cfg.workerPull && adapter.claimReset) await adapter.claimReset(scope);
+  // The timeline must be complete at every point: open the run with the PLAN (what was decided to do),
+  // not just the first task starting.
+  emit?.("phase", "planner", `plan · ${nodes.length} task(s) · ${buildLevels(nodes).length} level(s): ${nodes.map((n) => n.id).join(", ")}`);
   const makeWorker = (id: string) => {
     // One MCP server PER worker (a single shared instance races on registration under concurrency), all
     // writing the same `live` stats. The claim itself is resolved by the shared brain (adapter.claim) so
@@ -133,7 +137,13 @@ export async function runFleet(
             return r;
           }
         : undefined;
-    const onStep = stepSink(id, cfg.projectDir, cfg.onProgress); // narrate this worker's tool calls live
+    // Narrate this worker's tool calls live AND persist each one to the timeline (kind=trace) — without
+    // this the worker's interior is visible only while you watch; a replay would skip its 50–70s again.
+    const sink = stepSink(id, cfg.projectDir, cfg.onProgress);
+    const onStep = (tool: string, target?: string) => {
+      sink(tool, target);
+      emit?.("trace", id, `${id} → ${tool}${target ? ` ${target}` : ""}`, { nodeId: id, refs: target ? [target] : undefined });
+    };
     const w = new Worker(id, env, new ClaudeCodeRunner({ cwd: cfg.projectDir, maxTurns: cfg.maxTurns, brain, claim, build: cfg.build, onStep }), !!brain, cfg.build);
     w.join(env);
     return w;
@@ -148,5 +158,12 @@ export async function runFleet(
     writeFileSync(`${cfg.out}/trace-${label}.jsonl`, auditor.toJSONL());
     writeFileSync(`${cfg.out}/provenance-${label}.json`, JSON.stringify(outcome.provenance, null, 2));
   }
-  return { outcome, warnings: sentry.warnings.length, live };
+  // Close the run on the timeline with its outcome — a replay tells the whole story without the console.
+  emit?.(
+    "phase",
+    "conductor",
+    `run complete · reuses=${outcome.reuses} repairs=${outcome.repairs} overlaps=${sentry.warnings.length} · live pulls=${live.hits}/${live.searches} pushes=${live.learns} prevented=${live.skips} cites=${live.cites}`,
+  );
+  // runId lets callers (the build/rework loop) append THEIR events — acceptance verdicts — to this same run.
+  return { outcome, warnings: sentry.warnings.length, live, runId };
 }

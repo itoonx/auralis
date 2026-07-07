@@ -19,6 +19,8 @@ export interface Stats {
   count: number;
   edges: number;
   nodes: number;
+  cited?: number; // explicit "this helped" credits (usage-health dial, P1)
+  seen?: number; // recall servings
   vectors: boolean;
   embedder: string;
 }
@@ -27,6 +29,13 @@ export interface Finding {
   id: string;
   content: string;
   tier?: string;
+  source?: string;
+  trust?: number;
+  pinned?: boolean;
+  archived?: boolean;
+  timesUsed?: number;
+  retrieved?: number;
+  createdAt?: string;
 }
 
 async function json<T>(url: string): Promise<T> {

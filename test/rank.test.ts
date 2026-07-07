@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { rrf, trustOf, boost, daysBetween, strength, pinnedOf, ARCHIVE_FLOOR, RRF_K } from "../oracle-lite/rank";
+import { rrf, trustOf, boost, boostParts, daysBetween, strength, pinnedOf, ARCHIVE_FLOOR, RRF_K } from "../oracle-lite/rank";
 
 describe("rrf", () => {
   it("a doc in BOTH lists outranks a doc that tops one list", () => {
@@ -60,6 +60,15 @@ describe("boost", () => {
     const fresh = boost(1, { ...base, trust: 0.5, daysSinceAccess: 0 });
     const stale = boost(1, { ...base, trust: 0.5, daysSinceAccess: 28 }); // two half-lives
     expect(fresh).toBeGreaterThan(stale);
+  });
+
+  it("the score and its explanation can never drift apart (boost === base × boostParts.multiplier)", () => {
+    const cases = [
+      { trust: 0.85, timesUsed: 3, maxUsed: 5, daysSinceAccess: 7, superseded: false },
+      { trust: 0.5, timesUsed: 0, maxUsed: 0, daysSinceAccess: 100, superseded: true },
+      { trust: 1.0, timesUsed: 10, maxUsed: 10, daysSinceAccess: 0, superseded: false },
+    ];
+    for (const b of cases) expect(boost(0.7, b)).toBeCloseTo(0.7 * boostParts(b).multiplier, 12);
   });
 
   it("usage boosts, log-damped", () => {
