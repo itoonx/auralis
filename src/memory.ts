@@ -21,6 +21,9 @@ export interface SearchHit {
   source?: string;
   type?: string;
   supersededBy?: string; // set when this finding has been superseded by a newer one (still searchable)
+  validAt?: string; // U6: when the fact became true in the world (defaults to creation when unset)
+  // explain=1: why this hit was retrieved — per-list ranks, RRF base, and each boost component.
+  why?: { ftsRank: number | null; vecRank: number | null; rrf: number; recency: number; usage: number; trust: number; multiplier: number; outdated: boolean; asOf: string | null };
 }
 
 // One narrated moment on the activity timeline. `human` is the concise line a person reads; nodeId +
@@ -39,10 +42,14 @@ export interface TimelineEvent {
 }
 
 export interface MemoryAdapter {
-  search(query: string, opts?: { limit?: number; project?: string }): Promise<SearchHit[]>;
-  learn(pattern: string, opts?: { concepts?: string[]; project?: string; source?: string; tier?: "raw" | "distilled"; pinned?: boolean }): Promise<{ id: string }>;
+  // asOf (ISO): U6 temporal retrieval — "what was TRUE at time T" (valid-time; superseded docs never qualify).
+  search(query: string, opts?: { limit?: number; project?: string; asOf?: string }): Promise<SearchHit[]>;
+  learn(pattern: string, opts?: { concepts?: string[]; project?: string; source?: string; tier?: "raw" | "distilled"; pinned?: boolean; validAt?: string }): Promise<{ id: string }>;
   listDocs?(opts?: { tier?: string; project?: string; max?: number }): Promise<{ id: string; content: string; tier?: string }[]>;
   supersede?(oldId: string, newId: string, reason?: string): Promise<void>;
+  // U6: the world changed — the fact WAS true until invalidAt (default now). Distinct from supersede (= we
+  // were wrong). The doc stays searchable; ranking sinks it; as_of queries before invalidAt still see it.
+  invalidate?(oldId: string, opts?: { newId?: string; reason?: string; invalidAt?: string }): Promise<void>;
   relate?(docId: string, project: string, triplets: Triplet[]): Promise<void>; // store graph edges for a finding
   graph?(entity: string, project?: string): Promise<{ edges: GraphEdge[]; entities: string[] }>; // 1-hop neighborhood
   count?(): Promise<number>;
@@ -101,12 +108,14 @@ export class OracleAdapter implements MemoryAdapter {
   private readonly learnPath = process.env.ORACLE_LEARN_PATH ?? "/api/learn";
   constructor(private readonly baseUrl: string = DEFAULT_ORACLE) {}
 
-  async search(query: string, opts: { limit?: number; project?: string } = {}): Promise<SearchHit[]> {
+  async search(query: string, opts: { limit?: number; project?: string; asOf?: string; explain?: boolean } = {}): Promise<SearchHit[]> {
     const u = new URL(this.searchPath, this.baseUrl);
     u.searchParams.set("q", query);
     u.searchParams.set("mode", "hybrid");
     u.searchParams.set("limit", String(opts.limit ?? 5));
     if (opts.project) u.searchParams.set("project", opts.project);
+    if (opts.asOf) u.searchParams.set("as_of", opts.asOf);
+    if (opts.explain) u.searchParams.set("explain", "1");
     const res = await log.time("oracle.search", opts.project, () => fetch(u, { headers: AUTH, signal: AbortSignal.timeout(15_000) }));
     if (!res.ok) throw new Error(`oracle search ${res.status}: ${await res.text()}`);
     const body = (await res.json()) as { results?: any[] };
@@ -117,18 +126,20 @@ export class OracleAdapter implements MemoryAdapter {
       source: r.source,
       type: r.type,
       supersededBy: r.superseded_by ?? undefined,
+      validAt: r.valid_at ?? undefined,
+      why: r.why,
     }));
   }
 
   async learn(
     pattern: string,
-    opts: { concepts?: string[]; project?: string; source?: string; tier?: "raw" | "distilled"; pinned?: boolean } = {},
+    opts: { concepts?: string[]; project?: string; source?: string; tier?: "raw" | "distilled"; pinned?: boolean; validAt?: string } = {},
   ): Promise<{ id: string }> {
     const res = await log.time("oracle.learn", opts.project, () =>
       fetch(new URL(this.learnPath, this.baseUrl), {
         method: "POST",
         headers: { "content-type": "application/json", ...AUTH },
-        body: JSON.stringify({ pattern, concepts: opts.concepts, project: opts.project, source: opts.source ?? "auralis", tier: opts.tier, pinned: opts.pinned }),
+        body: JSON.stringify({ pattern, concepts: opts.concepts, project: opts.project, source: opts.source ?? "auralis", tier: opts.tier, pinned: opts.pinned, validAt: opts.validAt }),
         signal: AbortSignal.timeout(30_000),
       }),
     );
@@ -145,6 +156,17 @@ export class OracleAdapter implements MemoryAdapter {
       signal: AbortSignal.timeout(15_000),
     });
     if (!res.ok) throw new Error(`oracle supersede ${res.status}: ${await res.text()}`);
+  }
+
+  // U6: mark a fact as no-longer-true-in-the-world (validity ends at invalidAt; default now).
+  async invalidate(oldId: string, opts: { newId?: string; reason?: string; invalidAt?: string } = {}): Promise<void> {
+    const res = await fetch(new URL("/api/invalidate", this.baseUrl), {
+      method: "POST",
+      headers: { "content-type": "application/json", ...AUTH },
+      body: JSON.stringify({ oldId, newId: opts.newId, reason: opts.reason, invalidAt: opts.invalidAt }),
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (!res.ok) throw new Error(`oracle invalidate ${res.status}: ${await res.text()}`);
   }
 
   async relate(docId: string, project: string, triplets: Triplet[]): Promise<void> {

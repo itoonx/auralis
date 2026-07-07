@@ -43,10 +43,18 @@ export interface BoostInputs {
 // relevance win (its guardrail query) — RRF is rank-only, so it can't tell a near-tie from a real gap, and a
 // strong trust multiplier flips both. So trust nudges exact ties toward the more-credible source and no more;
 // its real teeth are in FORGETTING (strength()), not search order. Max multiplier ×1.35 — relevance dominates.
-export function boost(base: number, b: BoostInputs): number {
+// The component breakdown behind boost() — ONE implementation serves both scoring and `explain=1`
+// (philosophy principle 4: every memory must justify why it was retrieved). If the formula and its
+// explanation lived apart, they would drift apart.
+export function boostParts(b: BoostInputs): { recency: number; usage: number; trust: number; outdated: boolean; multiplier: number } {
   const recency = Math.pow(2, -Math.max(0, b.daysSinceAccess) / 14);
   const usage = b.maxUsed > 0 ? Math.log(1 + Math.max(0, b.timesUsed)) / Math.log(1 + b.maxUsed) : 0;
-  return base * (1 + 0.2 * recency + 0.1 * usage + 0.05 * b.trust) * (b.superseded ? 0.3 : 1);
+  const multiplier = (1 + 0.2 * recency + 0.1 * usage + 0.05 * b.trust) * (b.superseded ? 0.3 : 1);
+  return { recency, usage, trust: b.trust, outdated: b.superseded, multiplier };
+}
+
+export function boost(base: number, b: BoostInputs): number {
+  return base * boostParts(b).multiplier;
 }
 
 export function daysBetween(fromIso: string | null | undefined, now: number): number {

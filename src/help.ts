@@ -32,6 +32,7 @@ ${cmd("pnpm bench-rank", "A/B ranking bench — full ranker vs plain relevance o
 ${cmd('pnpm recall "<query>"', "what recall hands a worker: flat findings + graph neighborhood")}
 ${cmd("pnpm build-graph", "build the knowledge graph from findings (entity/relationship edges)")}
 ${cmd("pnpm distill", "consolidate near-duplicate findings into vetted ones")}
+${cmd("pnpm sleep", "the sleep job: snapshot -> dedup pass -> LLM judges ambiguous same-entity pairs (contradiction -> invalidate)")}
 ${cmd("pnpm decisions", "print the honest ADR log from the brain")}
 ${cmd("pnpm timeline", "replay a run's activity timeline — narrated feed + scorecard")}
 ${cmd("pnpm values", "show append-only + supersession (never deletes)")}
@@ -54,7 +55,7 @@ ${setting("AURALIS_BASELINE=1", "re-measure mode — also run the no-brain A/B b
 ${setting("AURALIS_QUIET=1", "silence the live step narration on stderr (MCP progress still flows)")}
 ${setting("AURALIS_LOG_TIMING=1", "stream each timing span to stderr; the TIMING summary prints either way")}
 ${setting("AURALIS_TIMELINE=0", "opt out of the activity timeline (default on when a brain is present)")}
-${setting("AURALIS_BUILD_GRAPH=1", "build the graph on ingest during pnpm dev")}
+${setting("ORACLE_GRAPH=0", "opt OUT of the automatic heuristic graph the brain builds on every learn")}
 ${setting("AURALIS_BUILD_GRAPH_LLM", "real predicates via Claude Code — ON by default; =0 for heuristic")}
 ${setting("AURALIS_DISTILL_LLM=1", "distill with Claude Code for real merges (costs)")}
 

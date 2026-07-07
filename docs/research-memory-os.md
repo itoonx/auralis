@@ -18,7 +18,26 @@ source; this doc is the decision layer: what we have, what the field has, what t
 > - anti-poisoning guards (critic rejects infra errors; rejected results never captured; dead runs write no
 >   retro) added after a real dead run stored "Credit balance is too low" as a finding — the field's gap #1
 >   (MINJA) reproduced by an outage, no attacker needed.
-> U5–U7 remain, deliberately deferred until real usage data accumulates (§6 sequence).
+> **U6 shipped (2026-07-07):** bi-temporal columns (`valid_at`/`invalid_at` + provenance), `POST
+> /api/invalidate` (world-changed, distinct from supersede = we-were-wrong), and `search?as_of=T` with
+> VALID-time semantics (truth-at-T; superseded docs never qualify; belief-time deliberately deferred).
+> Ranking sinks invalidated docs exactly like superseded ones — in NOW mode only; in as_of mode nothing
+> sinks, because everything returned WAS true at T. Integration-tested (30s→60s timeout scenario: now,
+> before-the-change, after-the-change) with both benches unregressed.
+> **U5 + U7 shipped (2026-07-07) — the plan is complete (U1–U7).** U7: atomic `VACUUM INTO` snapshot
+> (keep 5) before any automated mass-mutation, + `POST /api/snapshot`. U5 splits by capability: the
+> SERVER half (`POST /api/sleep`, nightly) snapshots then runs the mechanical dedup pass (same-entity,
+> cos ≥ 0.92 → supersede older/lower-trust, counters carried, pinned never loses) and returns the
+> ambiguous band (0.75–0.92) as candidates; the HOST half (`pnpm sleep`) judges each pair with Claude —
+> contradictory → the newer fact **invalidates** the older (the automatic writer of `invalid_at`, as
+> planned), duplicate → supersede, unparseable → never act. Promotion (episodic→semantic summaries) is
+> deliberately served by the existing `pnpm distill` instead of a new pass — the literature's strongest
+> negative result (summarization destroys retrievable detail) argues against more summarizing machinery.
+> Known limit, stated honestly: with the builtin trigram embedder a single-value contradiction can look
+> ≥0.92-identical and get deduped (right outcome — old value sinks — but labelled supersede, not
+> invalidate); real sentence embeddings (`AURALIS_SEMANTIC=1`) sharpen the band.
+> Proven live: snapshot file created → AuthGuard near-dup superseded mechanically → CacheLayer 10min→30min
+> pair judged "contradictory" and invalidated with the reason recorded. 89 tests green.
 
 ---
 
@@ -189,3 +208,137 @@ formulas without wiring the write path and never measured, so the flagship featu
 5. U6 folded into U5's contradiction pass.
 
 Each step ships with a before/after measurement — the same discipline that got us here.
+
+## 7. Embedding quality — analysed 2026-07-07, decision DEFERRED (do not act without the instrument)
+
+The one technical gap left after U1–U7. Current default is the **builtin char-trigram embedder**
+(256-dim lexical fingerprint); `AURALIS_SEMANTIC=1` (all-MiniLM-L6-v2 via the embed sidecar) is already
+built, opt-in.
+
+**Where trigram bites, per subsystem (from code, not theory):**
+- Hybrid retrieval: the vector list ≈ "FTS a second time" — RRF's second list adds little. The ranking
+  bench passed because its corpus is keyword-driven; a paraphrase query would expose it.
+- Sleep bands: the 0.92 dedup / 0.75–0.92 judgment thresholds come from literature calibrated on
+  SEMANTIC embeddings. On trigram, paraphrases fall below the dedup band (missed) and single-value
+  contradictions rise above it (deduped with the coarser label — the known limit already recorded).
+- Session capture: Thai prompts vs English findings — trigram cross-lingual similarity ≈ 0. Recall
+  currently survives because Thai prompts embed English tech terms; a pure-Thai query would go quiet.
+- What trigram is genuinely good at: near-identical dedup and code identifiers/paths — the workloads
+  it has passed live.
+
+**The options ladder:**
+| | quality | cost | principle check |
+|---|---|---|---|
+| A. trigram (today) | lexical only | zero deps, offline | ✓ |
+| B. MiniLM (built, opt-in) | English good, Thai weak | +1 local process, ~90MB first pull, ~10–50ms/embed | ✓ still no LLM in the write path |
+| C. multilingual (paraphrase-multilingual-MiniLM ~470MB, or bge-m3 ~2GB — Zep's choice) | real Thai↔English | more RAM/download | ✓ |
+| D. API embeddings | best | per-write cost + network | ✗ violates the free-write-path ADR — rejected |
+
+**Migration facts that block a casual flip:**
+1. Vector spaces are dim-namespaced on purpose (`lancedb-*-d256` vs `-d384`) — switching orphans every
+   existing doc from vector search until re-embedded. A **re-embed backfill command must exist first**.
+2. **Instrument first** (house rule): add a paraphrase case to the ranking bench that measurably FAILS
+   on trigram and PASSES on semantic — flip only on that evidence, not on literature.
+3. The production compose stack has no embedder service yet (the deferred P4 profile) — ships together.
+4. bench-rank/bench-graph run FTS-only by design, so they can neither regress nor *see* this change —
+   point 2 is the only honest eye.
+
+**Proposed two-step (NOT decided):** (1) build the instrument + backfill, measure trigram vs MiniLM on
+the paraphrase case; (2) if the gap is real, flip the default together with the compose profile — and
+choose the language model at that moment (if pure-Thai session queries matter, go multilingual once
+rather than flipping twice).
+
+## 8. Memory Philosophy — measured against the implementation (2026-07-07)
+
+The philosophy: memory is not remembering everything — it is remembering **what matters, why, and when**.
+Every memory must answer ten questions; five design principles; retrieval must return the most relevant,
+trustworthy, contextual, time-valid memory — not merely the most similar. Audited against the shipped
+system, question by question:
+
+| Question | Status | Answered by |
+|---|---|---|
+| What | ✅ | `content` |
+| When | ✅✅ | `created_at` + `valid_at`/`invalid_at` — true-when ≠ recorded-when (U6) |
+| Version | ✅✅ | `superseded_by` (we were wrong) vs `invalidated_by` (the world changed), reasons on both |
+| Who | ✅ | `source` (human / worker:id / retro / assistant); no approve-by — single-user YAGNI |
+| Authority | ✅ | trust-by-source priors + `pinned` = frozen by policy |
+| Confidence | ✅ | trust born LOW and earned; `cited/seen` = confidence backed by use |
+| Evidence | 🟡 | strongest at retros (derived from measured acceptance runs); findings carry explored-files; no structured refs |
+| Why | 🟡 | decisions: `because` + rejected alternatives; captures keep the originating `question:`; plain findings = prose |
+| Where | 🟡 | `source` = channel; graph edges link docs→file entities (structured-where by graph); no PR/ADR pointer field |
+| How | 🟡 | structured in decisions/retros; unstructured in findings |
+
+**Principles:** (2) context preserved ✓ (capture format, session lanes) · (3) safe evolution ✓✓
+(supersede/invalidate/snapshot) · (5) learn-consolidate-forget ✓✓ (cite/sleep/archive) ·
+(1)+(4) **explainability — closed today**: `search?explain=1` returns per-hit `why` (per-list ranks, RRF
+base, each boost component, outdated flag, as_of) from the SAME code path that computes the score
+(`boostParts()` — the formula and its story cannot drift apart; unit-tested equality).
+
+**Deliberate non-conformance, recorded:** structured Why/How per plain finding would need an LLM at write
+time — rejected (free-write-path ADR; graph + question-context cover it). Named owners/approval — single-user
+YAGNI. **The retrieval goal is the shipped formula verbatim:** RRF (relevant) × trust (trustworthy) ×
+project+graph (contextual) × outdated-sink + `as_of` (time-valid).
+
+## 9. Memory Schema — the audit and the standing rules (2026-07-07)
+
+**The rule every column lives by: a column must EARN its seat — writer + reader + a test proving it moves
+behaviour, all in the same commit.** All 19 current columns pass (each has a named consumer: ranking,
+forgetting, sleep, explain, dashboard). The Memoria lesson is the cautionary tale: schema shipped without
+wired write paths = lies that compile.
+
+**Design stances (opinions, held with evidence):**
+- **Derive, don't store.** No `status` enum (current/superseded/invalidated/archived are inferred from
+  facts), no stored `decay` (strength computes at read). Stored state desyncs; derived state cannot.
+- **No `updated_at` — deliberately.** Append-only means content never mutates (a correction is a
+  supersession). The missing column is structural proof of immutability.
+- **One trust number beats five synonyms.** The maximalist object's Authority/Trust/Confidence/Quality/
+  Reliability quintet is the most dangerous smell in the list: even ONE trust number only earns a 0.05
+  tiebreaker in ranking (measured). Ours: `trust` = prior by source; `cited/seen` = confidence earned by use.
+- **Importance-at-write rejected** — usage earns importance; a write-time guess (Generative Agents 1–10)
+  is static and noisy.
+- Embedding lives OUTSIDE the record (derived, rebuildable, dim-namespaced); relationships are a TABLE
+  (edges), not a JSON field; episodic is its own lane (events).
+
+**Verdicts on the "universal memory object" (30 fields):** present verbatim — Identity/Content/Project/
+Tags/Source/Created/Citations/Usage. Present as derived/external — Embedding/Graph/Version/Status/Decay/
+TTL. Collapsed — the trust quintet → 2 mechanisms. Rejected — Importance-at-write, full Access History
+(aggregates suffice), Dependencies (the supersede/invalidate chains are the only proven ones), Review
+Workflow / Permissions / Risk / Business-Criticality / Compliance (single-user YAGNI, per ADR).
+
+**Acknowledged debts, with re-entry triggers (do not build without the trigger):**
+1. `corroborations` — defer until sleep's winner-selection measurably misjudges equal-trust pairs; today
+   trust adjustments would vanish inside a 0.05 tiebreaker, and dedup's counter-carry is corroboration-lite.
+2. `refs` (structured Where → PR/ADR) — defer until a GitHub-aware workflow exists; today it has neither
+   writer nor reader, and graph edges already cover file-level where (M3-proven).
+3. Immutable/mutable table split — REJECTED at this scale (joins everywhere + risk to 93 proven tests to
+   solve a problem SQLite already solves); reconsider only on real WAL contention.
+
+## 10. Competitive readiness — assessed 2026-07-07 (real metrics to follow production usage)
+
+**Capability arena — ready today, advantaged.** The field's own summary ("retrieval is solved, judgment
+is not") describes exactly the judgment stack we shipped complete: trust-by-source, citation-earned
+confidence, principled forgetting, bi-temporal + as_of, a sleep job that adjudicates contradictions, and
+enforced coordination (the moat nobody else has at all). Each major competitor lacks 3–4 of these; we lack none.
+
+**Evidence arena — methodologically ahead, still self-referential.** Our benches prove they can fail
+before we trust a pass — rare in a field whose flagship benchmark collapsed into vendor methodology wars.
+But they are ours, run by us: a competitive claim needs a neutral arena (→ prd-longmemeval.md).
+
+**Production-trust arena — not ready, no shortcut.** Real data is days old (dozens of docs); forgetting/
+sleep/the usage dial have never met real scale or real time. Embedder is trigram (decision deferred, §7).
+No distribution (ghcr/npm recorded for the next production round). The only path is mileage.
+
+**Bottom line:** the architecture competes today; accumulated trust is the one thing left, and it can only
+be earned by running the thing. Sequence: real usage → embedder decision (via the LongMemEval A/B) →
+distribution → a neutral-benchmark number.
+
+### §7 resolved (2026-07-07): the instrument spoke — trigram STAYS
+
+The LongMemEval A/B (50-question stratified subset, S variant, identical harness/judge, verified d256 vs
+d384 spaces): trigram 58% vs MiniLM-semantic 56% TOTAL — a one-question difference, inside single-run
+noise. Semantic gained where predicted (user-facts +13, multi-session +10) but lost knowledge-update (−10)
+and collapsed on assistant-fact questions (33%→0%), and the paraphrase-heavy preference category the flip
+was supposed to rescue did not move at all (17%→17%) — the bottleneck there is not the embedder.
+DECISION: keep the zero-dependency trigram default; the flip is not justified by evidence. Revisit
+triggers: much larger per-project corpora (FTS strength dilutes), Thai-heavy recall (needs multilingual,
+not MiniLM anyway), or a full official-judge run painting a different picture.
