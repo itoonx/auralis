@@ -70,6 +70,12 @@ of reading numbers together. The outcome may reorder M2–M4 priorities — that
 **Gate:** pooled-100 × 3 with the new judge establishes the phase baseline and its real spread
 (expected ~80±3 after FN correction). **Effort:** ~1 day. **Risk:** none — harness-only,
 ranker untouched.
+**✅ Result (gate passed, 3× pooled-100):** baseline **79.3 ± 1.5** (81/79/78) — right on the
+expectation. The judge-fn class is 2/2 fixed in all three runs (pre-check works); variance-tagged
+questions flip run-to-run exactly as predicted; `single-session-user` is 16/16 in all three runs.
+The classes M2–M4 exist for are confirmed still broken: neighbor-chunk ≤1/3, aggregation ≤2/6,
+false-premise ≤1/2. Decision rule from here: **a milestone counts as landed only if its own class
+moves and the pooled-100 3× mean beats 79.3 by more than 3 points of its class's share.**
 
 ### M2 · Adjacency expansion — a hit pulls its neighbours
 **Why:** kills the sibling-chunk class (n=3): the answer to "what came after X" doesn't contain
