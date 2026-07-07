@@ -63,6 +63,10 @@ our own benches too, or they're overfitting).
   questions) → fixed (equivalence-aware judge, multi-entity union retrieval) → 70%. Remaining misses are
   retrieval-capability, not harness. Bonus: the concurrent run exposed and fixed an oracle id-collision
   bug under same-millisecond parallel learns.
+  **Correction (validation, 2026-07-09):** the multi-entity union was a NO-OP on this benchmark —
+  `extractEntities` is lexical and code-oriented (backticks, paths, CamelCase) and yields ≥1 entity on
+  only **12/500** LongMemEval questions. The 40%→70% gain came from the judge fix alone. The union code
+  stays (it is correct for the product's code-entity queries) but it earns nothing here.
 - **P2** ✅ trigram baseline 58% (internal Claude-judge; 480s wall for 50 full haystacks — LLM-less
   ingestion held: ~500 turns/question, zero ingest cost).
 - **P3** ✅ semantic A/B: 56% — no win; per-category table in research-memory-os.md §7-resolved. The
@@ -105,3 +109,47 @@ generic ingestion/answer policies (chunking, contextual headers, grounded-answer
 oracle were not touched. Remaining known gap: exact-notation recall (chess moves) and two-event date math.
 Product follow-up worth considering (deferred): apply the same chunk-with-anchor policy to
 `hooks/session-capture.mjs` for long assistant conclusions.
+
+## Validation (2026-07-09) — the 76% survives a held-out subset; the remaining gap decomposed
+
+Three experiments, run to test the 76% rather than to improve it:
+
+1. **Held-out subset** — 50 fresh questions, zero overlap, per-(type,abstention) distribution matched,
+   frozen config: **78%** (39/50). The subset-fit fear dies: two tuning iterations did not overfit the
+   original 50. Best current estimate is the pooled **77/100**. Per-category numbers at n=6–10 swing
+   ±15–20% between subsets (preference 50↔83, temporal 60↔90, multi-session 80↔60) — never read a
+   single-category number on one subset as signal.
+2. **Oracle-variant rerun** (evidence-only sessions, same 50 original questions, frozen config): **84%**
+   (up from 70% at P1). This splits the 24-point gap to 100: **~8 points are retrieval under haystack
+   noise; ~16 points survive even with retrieval solved** (answer-stage + judge). Category tells:
+   preference 50→**100** (pure retrieval problem — given evidence the model is perfect), assistant
+   67→**67** (unchanged: the failure is query↔answer token mismatch, scale-independent), temporal 60→80.
+3. **Retrieval probe + answer replay on all 12 original failures** — rebuilt each failed question's
+   brain, reran the exact harness retrieval, checked mechanically (via `answer_session_ids`) whether
+   evidence made top-12, then re-asked the exact answer prompt on those excerpts:
+   - **3/12 recovered on a pure re-roll** (two temporal date computations, the beer recommendation —
+     evidence was at ranks 1–5 all along). Answer-stage sampling variance is worth ~6% on a 50-Q subset:
+     larger than judge noise. Single-run comparisons under ~±6% are meaningless.
+   - **2/50 judge false-negatives measured** on the held-out run (gold "Premier Silver" vs our answer
+     beginning "Premier Silver —"; gold "Nu, pogodi!" named verbatim) — Claude-judge undercounts by ~4%;
+     held-out is arguably 82%.
+   - The rest are real, and they cluster:
+
+| root cause (pooled, both subsets, judge-FNs removed) | n | mechanism |
+|---|---|---|
+| exhaustive aggregation ("how many/total/order across sessions") | 6 | top-12 covers 1–2 of k evidence mentions; count/sum comes out short — retrieval has no "collect ALL mentions" mode |
+| preference paraphrase/transfer | 4 | zero token overlap (Q "homegrown ingredients" vs evidence "fresh basil and mint"; Miami question, Seattle preferences) — beyond any lexical ranker |
+| sibling-chunk miss (assistant recall) | 3 | the answer chunk shares no tokens with the question ("28. Kg3" vs "what came after 27. Kg2 Bd5+") — the right *session* ranks top-3, the right *chunk* doesn't; chunking created the seam |
+| abstention premise-traps | 2 | 2/2 failed identically on both subsets: topic-adjacent evidence exists, model answers instead of checking the premise ("Software Engineer Manager" role never existed) — and unstably (5 vs 4 engineers on identical input) |
+| second-event date retrieval + "today"-inference | 2 | second event absent from top-8, or the event's date is the session date itself and the model refuses the inference |
+| wrong-instance selection | 1 | multiple yoga mentions; retrieval surfaced the app, not the studio |
+
+Directions this ranks (none started): **(a)** adjacency expansion at read time — a hit pulls its
+neighbouring turn/chunk from the same session; kills the sibling-chunk class and is the natural graph
+edge the oracle already almost has. **(b)** an aggregation retrieval mode — "all dated mentions of X",
+feasible deterministically. **(c)** a premise-check line in the answer rules. **(d)** the preference
+class needs semantic representation or preference-tagging at ingest — the trigram-stays decision was
+made on P3 data that predates the truncation fix, so it is *decided on stale evidence*, but re-opening
+it requires its own A/B, not vibes. **(e)** harness observability: log retrieved doc ids per question
+(this analysis had to rebuild brains to see what retrieval did). **(f)** judge: 4% FN rate justifies a
+cheap "gold string appears verbatim in response → correct" pre-check before the LLM verdict.
