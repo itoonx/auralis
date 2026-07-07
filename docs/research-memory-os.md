@@ -24,8 +24,20 @@ source; this doc is the decision layer: what we have, what the field has, what t
 > Ranking sinks invalidated docs exactly like superseded ones — in NOW mode only; in as_of mode nothing
 > sinks, because everything returned WAS true at T. Integration-tested (30s→60s timeout scenario: now,
 > before-the-change, after-the-change) with both benches unregressed.
-> U5 + U7 remain, deliberately deferred until real usage data accumulates (§6 sequence) — the U5
-> contradiction pass is the intended automatic writer of `invalid_at`.
+> **U5 + U7 shipped (2026-07-07) — the plan is complete (U1–U7).** U7: atomic `VACUUM INTO` snapshot
+> (keep 5) before any automated mass-mutation, + `POST /api/snapshot`. U5 splits by capability: the
+> SERVER half (`POST /api/sleep`, nightly) snapshots then runs the mechanical dedup pass (same-entity,
+> cos ≥ 0.92 → supersede older/lower-trust, counters carried, pinned never loses) and returns the
+> ambiguous band (0.75–0.92) as candidates; the HOST half (`pnpm sleep`) judges each pair with Claude —
+> contradictory → the newer fact **invalidates** the older (the automatic writer of `invalid_at`, as
+> planned), duplicate → supersede, unparseable → never act. Promotion (episodic→semantic summaries) is
+> deliberately served by the existing `pnpm distill` instead of a new pass — the literature's strongest
+> negative result (summarization destroys retrievable detail) argues against more summarizing machinery.
+> Known limit, stated honestly: with the builtin trigram embedder a single-value contradiction can look
+> ≥0.92-identical and get deduped (right outcome — old value sinks — but labelled supersede, not
+> invalidate); real sentence embeddings (`AURALIS_SEMANTIC=1`) sharpen the band.
+> Proven live: snapshot file created → AuthGuard near-dup superseded mechanically → CacheLayer 10min→30min
+> pair judged "contradictory" and invalidated with the reason recorded. 89 tests green.
 
 ---
 

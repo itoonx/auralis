@@ -5,7 +5,7 @@
 // the brain silently falls back, so it always boots. VALUES LAYER: append-only — no delete route;
 // obsolescence is SUPERSESSION. FTS writes are synchronous (read-after-write).
 import { Database } from "bun:sqlite";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, readdirSync, rmSync } from "node:fs";
 import { resolveClaim } from "../src/claim";
 import { extractTriplets } from "../src/triplets";
 import { rrf, trustOf, boost, daysBetween, strength, pinnedOf, ARCHIVE_FLOOR } from "./rank";
@@ -136,6 +136,67 @@ function sweepArchive(): number {
 sweepArchive();
 const sweepTimer = setInterval(sweepArchive, 24 * 3600 * 1000);
 if (typeof sweepTimer.unref === "function") sweepTimer.unref();
+
+// U7 safety snapshot: an atomic full-brain backup (VACUUM INTO) before any automated mass-mutation —
+// cheap insurance the research flagged as the one "git for memory" idea worth keeping. Keep the last 5.
+const BACKUP_DIR = `${dbDirOf(DB_PATH)}backups`;
+function dbDirOf(p: string): string { return p.replace(/[^/]*$/, "") || "./"; }
+function snapshot(reason: string): string {
+  mkdirSync(BACKUP_DIR, { recursive: true });
+  const file = `${BACKUP_DIR}/pre-${reason}-${new Date().toISOString().replace(/[:.]/g, "-")}.db`;
+  db.run(`VACUUM INTO '${file.replace(/'/g, "''")}'`);
+  const old = readdirSync(BACKUP_DIR).filter((f) => f.endsWith(".db")).sort().reverse().slice(5);
+  for (const f of old) rmSync(`${BACKUP_DIR}/${f}`, { force: true });
+  return file;
+}
+
+// U5 (server half) — the DEDUP pass of the sleep job: same-entity, near-identical (cosine ≥ ~0.92) doc
+// pairs collapse by supersession — the older/lower-trust loser is superseded by the winner, usage counters
+// carried over so earned ranking survives. Mechanical and LLM-free (this image has no SDK, on purpose);
+// the contradiction pass that NEEDS judgment lives host-side in `pnpm sleep`. Never touches pinned docs.
+// cos ≥ 0.92 on normalized vectors ⇔ L2 ≤ 0.4 ⇔ our vector score 1/(1+L2) ≥ ~0.714.
+const DEDUP_SCORE = 1 / 1.4;
+const docEntities = db.query("SELECT DISTINCT subj_key AS k FROM edges WHERE doc_id = ? UNION SELECT DISTINCT obj_key FROM edges WHERE doc_id = ?");
+const carryStmt = db.query("UPDATE docs SET times_used = times_used + ?, retrieved_count = retrieved_count + ? WHERE id = ?");
+async function sleepDedup(cap = 200): Promise<{ deduped: number; scanned: number }> {
+  const rows = db
+    .query("SELECT id, content, project, source, trust, pinned, times_used, retrieved_count, created_at FROM docs WHERE superseded_by IS NULL AND invalid_at IS NULL AND archived = 0 ORDER BY created_at DESC LIMIT ?")
+    .all(cap) as any[];
+  const byId = new Map(rows.map((r) => [String(r.id), r]));
+  const ents = (id: string) => new Set((docEntities.all(id, id) as any[]).map((e) => String(e.k)));
+  let deduped = 0;
+  const byProject = new Map<string, number>();
+  for (const doc of rows) {
+    if (byId.get(String(doc.id))?.superseded_by) continue; // already lost this run
+    const near = await vectorQuery(String(doc.content), 6);
+    for (const [otherId, score] of near) {
+      if (otherId === String(doc.id) || score < DEDUP_SCORE) continue;
+      const other = byId.get(otherId);
+      if (!other || other.superseded_by || String(other.project ?? "") !== String(doc.project ?? "")) continue;
+      const shared = [...ents(String(doc.id))].some((k) => ents(otherId).has(k));
+      if (!shared) continue; // entity blocking: near-identical text about DIFFERENT things stays apart
+      // Winner: higher trust; tie → newer. The loser must not be pinned (pins are frozen by policy).
+      const [win, lose] =
+        Number(doc.trust) !== Number(other.trust)
+          ? Number(doc.trust) > Number(other.trust) ? [doc, other] : [other, doc]
+          : String(doc.created_at) >= String(other.created_at) ? [doc, other] : [other, doc];
+      if (lose.pinned) continue;
+      supersedeStmt.run(String(win.id), new Date().toISOString(), "sleep: near-duplicate (same entity, cos ≥ 0.92)", String(lose.id));
+      carryStmt.run(Number(lose.times_used ?? 0), Number(lose.retrieved_count ?? 0), String(win.id));
+      lose.superseded_by = String(win.id); // keep the in-memory view consistent for this run
+      deduped++;
+      const p = String(lose.project ?? "");
+      if (p) byProject.set(p, (byProject.get(p) ?? 0) + 1);
+    }
+  }
+  if (deduped) {
+    const ts = new Date().toISOString();
+    for (const [p, n] of byProject) insEvent.get("oracle:maintenance", p, "note", "oracle", `✎ sleep deduped ${n} near-duplicate(s) — superseded, counters carried`, null, null, null, ts);
+  }
+  return { deduped, scanned: rows.length };
+}
+const sleepTimer = setInterval(() => { snapshot("sleep"); sleepDedup().catch(() => {}); }, 24 * 3600 * 1000);
+if (typeof sleepTimer.unref === "function") sleepTimer.unref();
 
 // Stopwords: high-frequency words carry no topic. Without dropping them, a query like "how does auth work"
 // matches every doc containing "the/is/how" and the ranker orders noise — the ranking bench surfaced exactly
@@ -387,6 +448,44 @@ const server = Bun.serve({
     // U4: trigger the archive sweep on demand (ops/testing; boot + 24h interval run it automatically).
     if (req.method === "POST" && url.pathname === "/api/sweep") {
       return Response.json({ success: true, archived: sweepArchive() });
+    }
+
+    // U7: atomic full-brain backup on demand (VACUUM INTO; keeps the last 5).
+    if (req.method === "POST" && url.pathname === "/api/snapshot") {
+      const body = (await req.json().catch(() => ({}))) as any;
+      return Response.json({ success: true, file: snapshot(String(body?.reason ?? "manual").replace(/[^a-z0-9-]/gi, "-").slice(0, 24)) });
+    }
+
+    // U5 (server half): snapshot first, then the mechanical dedup pass. The response also carries the
+    // CONTRADICTION CANDIDATES — same-entity pairs in the ambiguous band (cos ~0.75–0.92) — for the
+    // host-side `pnpm sleep` to judge with an LLM; this server stays LLM-free by design.
+    if (req.method === "POST" && url.pathname === "/api/sleep") {
+      const file = snapshot("sleep");
+      const res = await sleepDedup();
+      const BAND_LO = 1 / (1 + Math.sqrt(2 - 2 * 0.75)); // cos 0.75 → score ~0.586
+      const rows = db
+        .query("SELECT id, content, project, created_at FROM docs WHERE superseded_by IS NULL AND invalid_at IS NULL AND archived = 0 ORDER BY created_at DESC LIMIT 120")
+        .all() as any[];
+      const byId = new Map(rows.map((r) => [String(r.id), r]));
+      const ents = (id: string) => new Set((docEntities.all(id, id) as any[]).map((e) => String(e.k)));
+      const seen = new Set<string>();
+      const candidates: any[] = [];
+      for (const doc of rows) {
+        if (candidates.length >= 20) break; // budget cap — the host LLM pass is per-pair work
+        const near = await vectorQuery(String(doc.content), 6);
+        for (const [otherId, score] of near) {
+          if (otherId === String(doc.id) || score < BAND_LO || score >= DEDUP_SCORE) continue;
+          const other = byId.get(otherId);
+          if (!other || String(other.project ?? "") !== String(doc.project ?? "")) continue;
+          const key = [String(doc.id), otherId].sort().join("|");
+          if (seen.has(key)) continue;
+          seen.add(key);
+          if (![...ents(String(doc.id))].some((k) => ents(otherId).has(k))) continue;
+          const [newer, older] = String(doc.created_at) >= String(other.created_at) ? [doc, other] : [other, doc];
+          candidates.push({ newerId: String(newer.id), olderId: String(older.id), newer: String(newer.content).slice(0, 500), older: String(older.content).slice(0, 500), project: doc.project ?? null });
+        }
+      }
+      return Response.json({ success: true, snapshot: file, ...res, candidates });
     }
 
     // U3 usage feedback: a worker cited this finding as having materially helped. Citation (not retrieval)

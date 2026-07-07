@@ -24,6 +24,7 @@
 | `pnpm recall "<q>"` | show what recall hands a worker: flat findings + the graph neighborhood |
 | `pnpm build-graph` | build the knowledge graph from findings (entity/relationship edges) |
 | `pnpm distill` | consolidate near-duplicate findings into vetted ones |
+| `pnpm sleep` | the sleep job — snapshot (U7) → mechanical dedup of same-entity near-duplicates → an LLM judges the ambiguous pairs: contradiction → the newer fact *invalidates* the older (`AURALIS_SLEEP_LLM=0` to only report) |
 | `pnpm decisions` | print the honest ADR log from the brain |
 | `pnpm values` | demonstrate append-only + supersession (never deletes) |
 

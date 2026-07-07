@@ -32,6 +32,7 @@ ${cmd("pnpm bench-rank", "A/B ranking bench — full ranker vs plain relevance o
 ${cmd('pnpm recall "<query>"', "what recall hands a worker: flat findings + graph neighborhood")}
 ${cmd("pnpm build-graph", "build the knowledge graph from findings (entity/relationship edges)")}
 ${cmd("pnpm distill", "consolidate near-duplicate findings into vetted ones")}
+${cmd("pnpm sleep", "the sleep job: snapshot -> dedup pass -> LLM judges ambiguous same-entity pairs (contradiction -> invalidate)")}
 ${cmd("pnpm decisions", "print the honest ADR log from the brain")}
 ${cmd("pnpm timeline", "replay a run's activity timeline — narrated feed + scorecard")}
 ${cmd("pnpm values", "show append-only + supersession (never deletes)")}

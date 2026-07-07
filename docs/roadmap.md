@@ -2,12 +2,10 @@
 
 Where the platform is headed. Ordered by leverage (timing tells us which knob actually moves the needle).
 
-- **Memory-OS upgrades** — U1–U4 are **shipped and measured** (RRF+trust ranking, citation feedback,
-  forgetting-as-ranking — see `docs/research-memory-os.md`). Remaining: **U5** nightly consolidation
-  ("sleep job": dedup ≥0.92, same-entity contradiction pass — *dedup, not summarize*), **U6** bi-temporal
-  (`superseded` = we were wrong vs `invalidated` = the world changed), **U7** safety snapshot
-  (`VACUUM INTO`) before destructive ops. Deliberately waiting for real usage data to accumulate first —
-  the sleep job needs citation counters and trust to pick supersede winners.
+- **Memory-OS upgrades — complete (U1–U7), all shipped and measured** (`docs/research-memory-os.md`):
+  RRF+trust ranking, citation feedback, forgetting-as-ranking, bi-temporal validity with `as_of` queries,
+  the sleep job (snapshot → dedup → LLM contradiction judgment writing `invalid_at`), and atomic
+  pre-mutation snapshots. Next on this axis: let real usage accumulate and watch the lifecycle work.
 - **Model / turn routing** — *highest leverage.* Timing proves the LLM call is 99.9% of wall-clock, so the
   real cost lever is *which* model runs *which* task: a small/cheap model for the Planner and easy subtasks,
   Opus reserved for hard analysis, plus a per-task turn budget. This is the one change measurement says is
