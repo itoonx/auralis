@@ -37,6 +37,12 @@ Everything else measured held up: the 76% survived a held-out subset (78%), inge
 
 ## Milestones
 
+Phase vocabulary (agreed 2026-07-09) → milestones: **Phase 1 Fix Measurement + Phase 2
+Retrieval Observability = M1** · **Phase 3 Multi-mode Retrieval = M2 + M4** (one mode
+interface; the semantic slot stays trigger-gated in Deferred) · **Phase 4 False-premise
+Guardrail = M3** · **Phase 5 LongMemEval Regression Suite = M1's judge fixtures +
+failure-class report**, grown every run.
+
 ### M0 · Production mileage checkpoint — calendar-gated, runs in parallel
 The daemon + global hooks are live; the brain accumulates real memories while we work.
 **Deliverable:** a review session over the first sleep report post-chunking + brain stats.
@@ -48,12 +54,22 @@ of reading numbers together. The outcome may reorder M2–M4 priorities — that
 **Why:** measured judge FN 4% + answer variance 6% > the size of most expected improvements.
 **Deliverables:**
 1. Judge pre-check: gold string appears verbatim in the response → correct, no LLM verdict.
-2. Harness writes a retrieval trace per question (doc ids + ranks + which excerpt cut) — this
-   analysis had to rebuild 12 brains to see what retrieval did; never again.
-3. Evaluation discipline: pooled-100 (both subsets) is the unit of comparison; single-50 runs
-   are smoke only. Report format states the noise bar.
-**Gate:** pooled-100 rerun with the new judge establishes the phase baseline (expected ~80±3
-after FN correction). **Effort:** ~half a day. **Risk:** none — harness-only, ranker untouched.
+2. Judge regression fixtures: every observed bad verdict ("Premier Silver", "Nu, pogodi!",
+   "Four … Mummies (4)") becomes a stored (question, gold, response, expected-verdict) case
+   the judge must pass — a unit test for the ruler, grown each time an audit catches a new one.
+3. Full per-question trace: retrieved doc ids + ranks + excerpt cuts, answer prompt, hypothesis,
+   judge verdict **and judge reason** — this analysis had to rebuild 12 brains to see what
+   retrieval did; never again.
+4. Failure-class tags: the 21 analyzed misses tagged (aggregation / semantic-mismatch /
+   neighbor-chunk / false-premise / lexical) and the run report broken down per class — every
+   later milestone must prove it moved *its* class and regressed nothing else.
+5. Evaluation discipline: pooled-100 is the iteration unit; **milestone gates run 3× and compare
+   means** (3× on every iteration would triple cost to beat noise we only face at decision
+   points — single runs stay for smoke). Borderline judge verdicts get a human-audit pass; the
+   manual audit is exactly what caught both FNs this round.
+**Gate:** pooled-100 × 3 with the new judge establishes the phase baseline and its real spread
+(expected ~80±3 after FN correction). **Effort:** ~1 day. **Risk:** none — harness-only,
+ranker untouched.
 
 ### M2 · Adjacency expansion — a hit pulls its neighbours
 **Why:** kills the sibling-chunk class (n=3): the answer to "what came after X" doesn't contain
@@ -86,7 +102,9 @@ on identical input). **Product story:** "list everything we know about X / every
 is a real agent query the oracle can't serve today.
 **Deliverables:** a deterministic retrieval mode (API-level: `mode=all` or similar) that returns
 every match above a floor for a topic, harness detects count/order/total questions by pattern
-and uses it.
+and uses it. This lands the **mode interface**: keyword (today's default), neighbor expansion
+(M2), exhaustive (this), time/entity filtering (already exists via `as_of` + query terms) — and
+a semantic mode plugs into the same seam if its Deferred trigger ever fires.
 **Gate:** aggregation class majority-fixed on pooled-100; API latency bounded on the production
 brain. **Effort:** 2–3 days (API + harness + tests). **Risk:** recall-vs-precision — the floor
 needs its own small bench.
