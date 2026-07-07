@@ -22,6 +22,10 @@ numbers are real but **directional** — each is from a single non-deterministic
 | **Ranking boosts earn their place** | A/B bench: plain relevance **25%** → full ranker **75%** precision@1; guardrail held (trust may not override relevance). The bench caught 2 real bugs before shipping |
 | **Workers credit what helped** | real analyze run: **cites=4 unprompted** — the synthesis worker cited the 3 level-1 findings it built on; cited docs measurably rank up |
 | **Memory is poison-guarded** | a dead run (API credit $0) tried to store "Credit balance is too low" as a finding claiming files were covered — critic rejected it, nothing was captured, no retro written |
+| **Temporal recall answers "when"** | timeout changed 30s→60s on June 1st: NOW ranks 60s first; `as_of` March returns only 30s; `as_of` July returns only 60s |
+| **The sleep job judges for real** | live loop: a near-duplicate pair superseded mechanically; a genuine 10min→30min contradiction classified by the LLM and the stale fact invalidated with the reason recorded — after an atomic pre-mutation snapshot |
+| **Workers self-narrate completely** | a replayed run shows plan → every tool step → findings → acceptance verdicts → reworks → summary, with no silent gaps |
+| **Session capture is pollution-proof** | fleet-worker prompts and harness payloads stand down from the hooks; a worker prompt that briefly landed as a trust-1.0 memory is what proved the guard necessary |
 
 ## Honest notes
 

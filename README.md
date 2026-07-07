@@ -15,16 +15,19 @@ folder and they **build** one — the same coordination either way.
 
 | | In one line | Deep dive |
 |---|---|---|
-| **Shared brain** | persistent, append-only memory with semantic recall, a knowledge graph, trust-tiered ranking, and forgetting-without-deleting | [platform](docs/platform.md#1--the-shared-brain-oracle-lite) |
+| **A living memory** | not storage — a full lifecycle: recall by meaning + knowledge graph, ranking by *earned* trust and citations, **time-travel recall** (`as_of` — what was true *then*), graceful forgetting, and a **sleep job** that tidies contradictions while you're away | [platform](docs/platform.md#1--the-shared-brain-oracle-lite) · [research](docs/research-memory-os.md) |
 | **Coordination** | agents plan, share live mid-task, and are *prevented* — not advised — from duplicating or clobbering work | [platform](docs/platform.md#2--coordination-the-society) |
 | **Build mode** | the fleet writes real programs — one file per worker, interfaces agreed via the brain, verified by an independent harness, reworked on failure | [platform](docs/platform.md#build-mode--the-fleet-writes-code) |
+| **Session memory, both ways** | your Claude Code session feeds the same brain the fleet uses — what you say becomes recallable by workers, what the fleet learns surfaces back in your prompts, and every exchange lands on a replayable timeline | [mcp](docs/mcp.md) |
 | **Runtime-agnostic** | policy lives in the middle layer; swap Claude for any model/agent without touching coordination | [platform](docs/platform.md#3--runtime-agnostic-any-model-any-agent) |
-| **Observability** | every span timed, every run leaves a "why" trail, a live dashboard (studio) | [platform](docs/platform.md#4--observability-find-the-real-bottleneck) |
+| **Observability** | every step of every run — plans, tool calls, verdicts, reworks — timed, narrated, and replayable in a live dashboard (studio) | [platform](docs/platform.md#4--observability-find-the-real-bottleneck) |
 
 Every capability above was **measured on live runs, not asserted** — a few headlines:
 redundant work **−53%** · duplicate work *prevented*, not advised (`prevented-dupes=4`) · real multi-file
 programs built and verified first-try (REST API, expression evaluator) · ranking A/B: plain **25% → 75%**
-precision@1 · the brain **defends its own memory** (bad writes rejected at the gate). Full results:
+precision@1 · asked "what was the timeout *in March*?" and got March's answer (`as_of`) · the sleep job
+caught a real 10min→30min contradiction, judged it, and retired the stale fact **with the reason recorded**
+· the brain **defends its own memory** (bad writes rejected at the gate). Full results:
 **[docs/proven.md](docs/proven.md)**.
 
 ## Architecture
