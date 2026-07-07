@@ -22,6 +22,9 @@ export interface SearchHit {
   type?: string;
   supersededBy?: string; // set when this finding has been superseded by a newer one (still searchable)
   validAt?: string; // U6: when the fact became true in the world (defaults to creation when unset)
+  // M2 adjacency expansion (expand: true): the hit's insertion-order neighbours (same project, ±1) —
+  // "what came after X" answers live in the chunk NEXT to the one that matches.
+  neighbors?: { id: string; content: string; position: "prev" | "next"; validAt?: string }[];
   // explain=1: why this hit was retrieved — per-list ranks, RRF base, and each boost component.
   why?: { ftsRank: number | null; vecRank: number | null; rrf: number; recency: number; usage: number; trust: number; multiplier: number; outdated: boolean; asOf: string | null };
 }
@@ -108,7 +111,7 @@ export class OracleAdapter implements MemoryAdapter {
   private readonly learnPath = process.env.ORACLE_LEARN_PATH ?? "/api/learn";
   constructor(private readonly baseUrl: string = DEFAULT_ORACLE) {}
 
-  async search(query: string, opts: { limit?: number; project?: string; asOf?: string; explain?: boolean } = {}): Promise<SearchHit[]> {
+  async search(query: string, opts: { limit?: number; project?: string; asOf?: string; explain?: boolean; expand?: boolean } = {}): Promise<SearchHit[]> {
     const u = new URL(this.searchPath, this.baseUrl);
     u.searchParams.set("q", query);
     u.searchParams.set("mode", "hybrid");
@@ -116,6 +119,7 @@ export class OracleAdapter implements MemoryAdapter {
     if (opts.project) u.searchParams.set("project", opts.project);
     if (opts.asOf) u.searchParams.set("as_of", opts.asOf);
     if (opts.explain) u.searchParams.set("explain", "1");
+    if (opts.expand) u.searchParams.set("expand", "1");
     const res = await log.time("oracle.search", opts.project, () => fetch(u, { headers: AUTH, signal: AbortSignal.timeout(15_000) }));
     if (!res.ok) throw new Error(`oracle search ${res.status}: ${await res.text()}`);
     const body = (await res.json()) as { results?: any[] };
@@ -128,6 +132,9 @@ export class OracleAdapter implements MemoryAdapter {
       supersededBy: r.superseded_by ?? undefined,
       validAt: r.valid_at ?? undefined,
       why: r.why,
+      neighbors: Array.isArray(r.neighbors)
+        ? r.neighbors.map((n: any) => ({ id: String(n.id ?? ""), content: String(n.content ?? ""), position: n.position === "prev" ? "prev" : "next", validAt: n.valid_at ?? undefined }))
+        : undefined,
     }));
   }
 

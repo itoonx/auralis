@@ -52,7 +52,7 @@ async function ask(prompt: string): Promise<string> {
   return out.trim();
 }
 
-interface Trace { hits: { id: string; rank: number; cut: number }[]; excerpts: string }
+interface Trace { hits: { id: string; rank: number; cut: number; neighbors?: string[] }[]; excerpts: string }
 
 async function runOne(oracle: OracleAdapter, q: Q): Promise<{ id: string; type: string; hypothesis: string; ingested: number; trace: Trace }> {
   const project = `lme_${q.question_id}`;
@@ -89,7 +89,9 @@ async function runOne(oracle: OracleAdapter, q: Q): Promise<{ id: string; type: 
   // to cover only the dominant one (sanity-gate finding). Union the main search with a per-entity search
   // so every named event gets its own shot. Deterministic, no LLM.
   const seen = new Map<string, (typeof hits0)[number]>();
-  const hits0 = await oracle.search(q.question, { project, limit: 8 });
+  // M2 adjacency expansion: top hits carry their insertion-order neighbours — the answer to
+  // "what came after X" sits in the chunk NEXT to the one that matches the question's words.
+  const hits0 = await oracle.search(q.question, { project, limit: 8, expand: true });
   for (const h of hits0) seen.set(h.id, h);
   for (const ent of extractEntities(q.question).slice(0, 3)) {
     for (const h of await oracle.search(ent, { project, limit: 4 })) if (!seen.has(h.id)) seen.set(h.id, h);
@@ -97,13 +99,23 @@ async function runOne(oracle: OracleAdapter, q: Q): Promise<{ id: string; type: 
   const hits = [...seen.values()].slice(0, 12);
   if (!hits.length) return { id: q.question_id, type: q.question_type, hypothesis: "I don't know.", ingested, trace: { hits: [], excerpts: "" } };
   // Rank-aware excerpts: the top hits carry the evidence — give them room (chunked memories fit whole);
-  // the tail is context, a teaser is enough.
+  // the tail is context, a teaser is enough. Neighbour chunks (M2) render indented under their hit,
+  // deduped against anything already retrieved in its own right.
+  const shown = new Set(hits.map((h) => String(h.id)));
   const excerpts = hits
-    .map((h, i) => `- [said ${String(h.validAt ?? "").slice(0, 10) || "unknown date"}] ${h.content.slice(0, i < 4 ? 1400 : 400)}`)
+    .map((h, i) => {
+      let line = `- [said ${String(h.validAt ?? "").slice(0, 10) || "unknown date"}] ${h.content.slice(0, i < 4 ? 1400 : 400)}`;
+      for (const n of h.neighbors ?? []) {
+        if (shown.has(n.id)) continue;
+        shown.add(n.id);
+        line += `\n  ↳ [${n.position === "prev" ? "said just before" : "said right after"}] ${n.content.slice(0, 400)}`;
+      }
+      return line;
+    })
     .join("\n");
   // M1 observability: record exactly what retrieval returned and what the answer stage saw — the
   // validation round had to rebuild 12 brains to learn this; the trace makes every run inspectable.
-  const trace: Trace = { hits: hits.map((h, i) => ({ id: String(h.id), rank: i + 1, cut: i < 4 ? 1400 : 400 })), excerpts };
+  const trace: Trace = { hits: hits.map((h, i) => ({ id: String(h.id), rank: i + 1, cut: i < 4 ? 1400 : 400, neighbors: (h.neighbors ?? []).map((n) => n.id) })), excerpts };
   const hypothesis = await ask(
     `Today is ${q.question_date}. Below are excerpts from the user's past chat sessions, each marked with when it was said.\n\n` +
       `${excerpts}\n\nQuestion: ${q.question}\n\n` +

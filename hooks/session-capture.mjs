@@ -137,11 +137,18 @@ async function recall(project, query) {
     u.searchParams.set("q", query.slice(0, 300));
     u.searchParams.set("project", project);
     u.searchParams.set("limit", "3");
+    // M2 adjacency expansion, flag-gated (default OFF): hits carry their neighbouring chunks —
+    // useful when the answer to "what came after X" lives in the chunk next to the match.
+    if (process.env.AURALIS_RECALL_EXPAND === "1") u.searchParams.set("expand", "1");
     const r = await fetch(u, { headers: AUTH, signal: AbortSignal.timeout(TIMEOUT) });
     if (!r.ok) return null;
     const hits = (await r.json()).results ?? [];
     if (!hits.length) return null;
-    const lines = hits.map((h) => `- [${h.id}] ${clip(String(h.content), 220)}`);
+    const lines = hits.map((h) => {
+      let l = `- [${h.id}] ${clip(String(h.content), 220)}`;
+      for (const n of h.neighbors ?? []) l += `\n  ↳ ${clip(String(n.content), 160)}`;
+      return l;
+    });
     return `[oracle-lite recall — this repo's brain]\n${lines.join("\n")}\n(if one materially helps, cite it: mcp__oracle__cite)`;
   } catch {
     return null;

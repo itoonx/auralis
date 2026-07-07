@@ -94,7 +94,7 @@ const edgeCountStmt = db.query("SELECT COUNT(*) AS c FROM edges");
 const nodeCountStmt = db.query("SELECT COUNT(*) AS c FROM (SELECT subj_key AS k FROM edges UNION SELECT obj_key FROM edges)");
 const SEARCH_COLS = `d.id AS id, d.content AS content, d.source AS source, d.superseded_by AS superseded_by,
           d.trust AS trust, d.times_used AS times_used, d.last_accessed_at AS last_accessed_at, d.created_at AS created_at,
-          d.valid_at AS valid_at, d.invalid_at AS invalid_at`;
+          d.valid_at AS valid_at, d.invalid_at AS invalid_at, d.project AS project`;
 const searchStmt = db.query(
   `SELECT ${SEARCH_COLS}, bm25(docs_fts) AS rank
    FROM docs_fts JOIN docs d ON d.id = docs_fts.id
@@ -807,7 +807,27 @@ const server = Bun.serve({
       const top = scored.sort((a, b) => b.score - a.score).slice(0, limit);
       const nowIso = new Date().toISOString();
       for (const r of top) touchStmt.run(nowIso, r.id); // recency reinforcement + observability
-      const results = top.map((r) => ({
+      // M2 adjacency expansion (expand=1): the answer to "what came after X" rarely shares X's words —
+      // it sits in the chunk NEXT to the one that matched (LME neighbor-chunk class: "28. Kg3" vs a
+      // question quoting "27. Kg2 Bd5+"). Each of the top 3 hits may carry its insertion-order
+      // neighbours (same project, rowid ±1, unarchived, not already a hit). Read-time only, bounded.
+      const expand = url.searchParams.get("expand") === "1";
+      const topIds = new Set(top.map((r) => r.id));
+      const neighborsOf = (id: string, proj: unknown) => {
+        const out: { id: string; content: string; position: "prev" | "next"; valid_at?: string }[] = [];
+        for (const [cmp, ord, pos] of [["<", "DESC", "prev"], [">", "ASC", "next"]] as const) {
+          const n = db
+            .query(
+              `SELECT id, content, valid_at FROM docs
+               WHERE project IS ? AND archived = 0 AND rowid ${cmp} (SELECT rowid FROM docs WHERE id = ?)
+               ORDER BY rowid ${ord} LIMIT 1`,
+            )
+            .get(proj ?? null, id) as any;
+          if (n && !topIds.has(String(n.id))) out.push({ id: String(n.id), content: String(n.content).slice(0, 1000), position: pos, valid_at: n.valid_at ?? undefined });
+        }
+        return out;
+      };
+      const results = top.map((r, i) => ({
         id: r.id,
         content: String(r.doc.content).slice(0, 2000),
         type: "learning",
@@ -818,6 +838,7 @@ const server = Bun.serve({
         trust: Number(r.doc.trust ?? 0.5),
         score: r.score,
         why: r.why,
+        neighbors: expand && i < 3 ? neighborsOf(r.id, r.doc.project) : undefined,
       }));
       return Response.json({ results, total: results.length, query: q, mode, vectors: vectorsOn, embedder, as_of: asOf !== null ? new Date(asOf).toISOString() : undefined });
     }
