@@ -247,3 +247,34 @@ built, opt-in.
 the paraphrase case; (2) if the gap is real, flip the default together with the compose profile — and
 choose the language model at that moment (if pure-Thai session queries matter, go multilingual once
 rather than flipping twice).
+
+## 8. Memory Philosophy — measured against the implementation (2026-07-07)
+
+The philosophy: memory is not remembering everything — it is remembering **what matters, why, and when**.
+Every memory must answer ten questions; five design principles; retrieval must return the most relevant,
+trustworthy, contextual, time-valid memory — not merely the most similar. Audited against the shipped
+system, question by question:
+
+| Question | Status | Answered by |
+|---|---|---|
+| What | ✅ | `content` |
+| When | ✅✅ | `created_at` + `valid_at`/`invalid_at` — true-when ≠ recorded-when (U6) |
+| Version | ✅✅ | `superseded_by` (we were wrong) vs `invalidated_by` (the world changed), reasons on both |
+| Who | ✅ | `source` (human / worker:id / retro / assistant); no approve-by — single-user YAGNI |
+| Authority | ✅ | trust-by-source priors + `pinned` = frozen by policy |
+| Confidence | ✅ | trust born LOW and earned; `cited/seen` = confidence backed by use |
+| Evidence | 🟡 | strongest at retros (derived from measured acceptance runs); findings carry explored-files; no structured refs |
+| Why | 🟡 | decisions: `because` + rejected alternatives; captures keep the originating `question:`; plain findings = prose |
+| Where | 🟡 | `source` = channel; graph edges link docs→file entities (structured-where by graph); no PR/ADR pointer field |
+| How | 🟡 | structured in decisions/retros; unstructured in findings |
+
+**Principles:** (2) context preserved ✓ (capture format, session lanes) · (3) safe evolution ✓✓
+(supersede/invalidate/snapshot) · (5) learn-consolidate-forget ✓✓ (cite/sleep/archive) ·
+(1)+(4) **explainability — closed today**: `search?explain=1` returns per-hit `why` (per-list ranks, RRF
+base, each boost component, outdated flag, as_of) from the SAME code path that computes the score
+(`boostParts()` — the formula and its story cannot drift apart; unit-tested equality).
+
+**Deliberate non-conformance, recorded:** structured Why/How per plain finding would need an LLM at write
+time — rejected (free-write-path ADR; graph + question-context cover it). Named owners/approval — single-user
+YAGNI. **The retrieval goal is the shipped formula verbatim:** RRF (relevant) × trust (trustworthy) ×
+project+graph (contextual) × outdated-sink + `as_of` (time-valid).

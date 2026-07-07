@@ -21,6 +21,8 @@ export interface SearchHit {
   source?: string;
   type?: string;
   supersededBy?: string; // set when this finding has been superseded by a newer one (still searchable)
+  // explain=1: why this hit was retrieved — per-list ranks, RRF base, and each boost component.
+  why?: { ftsRank: number | null; vecRank: number | null; rrf: number; recency: number; usage: number; trust: number; multiplier: number; outdated: boolean; asOf: string | null };
 }
 
 // One narrated moment on the activity timeline. `human` is the concise line a person reads; nodeId +
@@ -105,13 +107,14 @@ export class OracleAdapter implements MemoryAdapter {
   private readonly learnPath = process.env.ORACLE_LEARN_PATH ?? "/api/learn";
   constructor(private readonly baseUrl: string = DEFAULT_ORACLE) {}
 
-  async search(query: string, opts: { limit?: number; project?: string; asOf?: string } = {}): Promise<SearchHit[]> {
+  async search(query: string, opts: { limit?: number; project?: string; asOf?: string; explain?: boolean } = {}): Promise<SearchHit[]> {
     const u = new URL(this.searchPath, this.baseUrl);
     u.searchParams.set("q", query);
     u.searchParams.set("mode", "hybrid");
     u.searchParams.set("limit", String(opts.limit ?? 5));
     if (opts.project) u.searchParams.set("project", opts.project);
     if (opts.asOf) u.searchParams.set("as_of", opts.asOf);
+    if (opts.explain) u.searchParams.set("explain", "1");
     const res = await log.time("oracle.search", opts.project, () => fetch(u, { headers: AUTH, signal: AbortSignal.timeout(15_000) }));
     if (!res.ok) throw new Error(`oracle search ${res.status}: ${await res.text()}`);
     const body = (await res.json()) as { results?: any[] };
@@ -122,6 +125,7 @@ export class OracleAdapter implements MemoryAdapter {
       source: r.source,
       type: r.type,
       supersededBy: r.superseded_by ?? undefined,
+      why: r.why,
     }));
   }
 

@@ -8,7 +8,7 @@ import { Database } from "bun:sqlite";
 import { mkdirSync, readdirSync, rmSync } from "node:fs";
 import { resolveClaim } from "../src/claim";
 import { extractTriplets } from "../src/triplets";
-import { rrf, trustOf, boost, daysBetween, strength, pinnedOf, ARCHIVE_FLOOR } from "./rank";
+import { rrf, trustOf, boost, boostParts, daysBetween, strength, pinnedOf, ARCHIVE_FLOOR } from "./rank";
 
 const PORT = Number(process.env.ORACLE_PORT ?? 47778);
 const DB_PATH = process.env.ORACLE_DB ?? ".auralis-out/brain.sqlite";
@@ -725,6 +725,9 @@ const server = Bun.serve({
       // a different question, deliberately not implemented until someone needs it.
       const asOfRaw = url.searchParams.get("as_of");
       const asOf = asOfRaw && !Number.isNaN(Date.parse(asOfRaw)) ? Date.parse(asOfRaw) : null;
+      // explain=1: every result justifies WHY it was retrieved (philosophy principle 4) — the rank each
+      // list gave it, the RRF base, and each boost component. Same code path computes score and story.
+      const explain = url.searchParams.get("explain") === "1";
 
       const ftsRows =
         mode === "vector"
@@ -767,18 +770,35 @@ const server = Bun.serve({
       // "No longer current" sinks the same way whichever way it happened: superseded (we were wrong) or
       // invalidated (the world changed). In as_of mode nothing sinks — everything left WAS true at T.
       const outdated = (d: any) => !!d.superseded_by || (d.invalid_at != null && Date.parse(d.invalid_at) <= now);
-      const scored = cands.map((c) => ({
-        ...c,
-        score: plain
-          ? c.base // baseline: pure RRF relevance, no boosts (the ranking bench's A/B control)
-          : boost(c.base, {
-              trust: Number(c.doc.trust ?? 0.5),
-              timesUsed: Number(c.doc.times_used ?? 0),
-              maxUsed,
-              daysSinceAccess: daysBetween(c.doc.last_accessed_at ?? c.doc.created_at, now),
-              superseded: asOf !== null ? false : outdated(c.doc),
-            }),
-      }));
+      const ftsRankOf = new Map(ftsRows.map((r, i) => [String(r.id), i + 1]));
+      const vecRankOf = new Map(vRanked.map((id, i) => [id, i + 1]));
+      const scored = cands.map((c) => {
+        const inputs = {
+          trust: Number(c.doc.trust ?? 0.5),
+          timesUsed: Number(c.doc.times_used ?? 0),
+          maxUsed,
+          daysSinceAccess: daysBetween(c.doc.last_accessed_at ?? c.doc.created_at, now),
+          superseded: asOf !== null ? false : outdated(c.doc),
+        };
+        const parts = boostParts(inputs);
+        return {
+          ...c,
+          score: plain ? c.base : c.base * parts.multiplier, // plain = pure RRF (the bench's A/B control)
+          why: explain
+            ? {
+                ftsRank: ftsRankOf.get(c.id) ?? null,
+                vecRank: vecRankOf.get(c.id) ?? null,
+                rrf: c.base,
+                recency: Number(parts.recency.toFixed(3)),
+                usage: Number(parts.usage.toFixed(3)),
+                trust: parts.trust,
+                multiplier: plain ? 1 : Number(parts.multiplier.toFixed(3)),
+                outdated: parts.outdated,
+                asOf: asOf !== null ? new Date(asOf).toISOString() : null,
+              }
+            : undefined,
+        };
+      });
 
       const top = scored.sort((a, b) => b.score - a.score).slice(0, limit);
       const nowIso = new Date().toISOString();
@@ -793,6 +813,7 @@ const server = Bun.serve({
         valid_at: r.doc.valid_at ?? undefined,
         trust: Number(r.doc.trust ?? 0.5),
         score: r.score,
+        why: r.why,
       }));
       return Response.json({ results, total: results.length, query: q, mode, vectors: vectorsOn, embedder, as_of: asOf !== null ? new Date(asOf).toISOString() : undefined });
     }

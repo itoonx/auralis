@@ -37,6 +37,26 @@ describe("Oracle read-after-write (needs sidecar at :47778)", () => {
     expect(g2.edges.length).toBe(g1.edges.length);
   }, 60_000);
 
+  it("explain=1: every hit justifies why it was retrieved (principle 4)", async () => {
+    if (!(await oracleReachable())) {
+      console.warn("Oracle not reachable — skipping explain test.");
+      return;
+    }
+    const oracle = new OracleAdapter();
+    const project = "ex-" + Math.random().toString(36).slice(2, 8);
+    await oracle.learn("The `TokenBucket` limiter in net/bucket.ts refills 10 tokens per second.", { project });
+    const hits = await oracle.search("TokenBucket limiter refill rate", { project, limit: 1, explain: true });
+    expect(hits.length).toBe(1);
+    const why = hits[0].why!;
+    expect(why.ftsRank).toBe(1); // it topped the keyword list…
+    expect(why.rrf).toBeGreaterThan(0); // …with an RRF base…
+    expect(why.multiplier).toBeGreaterThan(1); // …and boosts that nudged, never gated
+    expect(why.outdated).toBe(false);
+    // and without explain, the payload stays lean:
+    const lean = await oracle.search("TokenBucket limiter refill rate", { project, limit: 1 });
+    expect(lean[0].why).toBeUndefined();
+  }, 60_000);
+
   it("temporal retrieval (U6): invalidated facts sink NOW but as_of returns the truth-at-T", async () => {
     if (!(await oracleReachable())) {
       console.warn("Oracle not reachable — skipping temporal test.");
