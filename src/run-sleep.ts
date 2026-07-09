@@ -7,7 +7,7 @@
 // Budget-capped, append-only either way, and the snapshot taken BEFORE any of it means one file restores
 // everything. AURALIS_SLEEP_LLM=0 skips judgment and only reports the candidates.
 import { OracleAdapter, oracleReachable } from "./memory";
-import { ClaudeCodeRunner, type AgentRunner } from "./runner";
+import { makeRunner, type AgentRunner } from "./runner";
 
 export type Verdict = "contradictory" | "duplicate" | "compatible";
 
@@ -53,7 +53,7 @@ async function main() {
     if (sleep.candidates.length) console.log("  (AURALIS_SLEEP_LLM=0 — candidates reported, not judged)");
     return;
   }
-  const runner = new ClaudeCodeRunner({ cwd: process.cwd(), maxTurns: 2 });
+  const runner = makeRunner({ cwd: process.cwd(), maxTurns: 2 });
   let contradicted = 0, duplicated = 0;
   for (const c of sleep.candidates) {
     const { verdict, reason } = await classifyPair(runner, c.newer, c.older);

@@ -4,7 +4,7 @@
 import { OracleAdapter } from "./memory";
 import { ensureOracle } from "./fleet";
 import { distill } from "./distill";
-import { ClaudeCodeRunner } from "./runner";
+import { makeRunner } from "./runner";
 
 const PROJECT = process.env.AURALIS_PROJECT ?? "default";
 const PROJECT_DIR = process.env.AURALIS_PROJECT_DIR ?? process.cwd();
@@ -17,7 +17,7 @@ async function heuristicSynthesize(contents: string[]): Promise<string> {
 }
 
 async function llmSynthesize(contents: string[]): Promise<string> {
-  const runner = new ClaudeCodeRunner({ cwd: PROJECT_DIR, maxTurns: 4 });
+  const runner = makeRunner({ cwd: PROJECT_DIR, maxTurns: 4 });
   const prompt =
     `Merge these ${contents.length} related findings into ONE concise, non-redundant consolidated finding. ` +
     `Resolve contradictions, keep only what is durable, output the consolidated finding only.\n\n` +

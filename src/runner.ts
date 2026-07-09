@@ -115,6 +115,36 @@ export class ClaudeCodeRunner implements AgentRunner {
   }
 }
 
+// A minimal, TOOL-LESS runner for background LLM lifecycle work (contradiction judging, distillation
+// synthesis): prompt in, text out, via any OpenAI-compatible chat API. Unlike ClaudeCodeRunner it needs no
+// interactive auth and no tools, so a scheduled job can run it UNATTENDED and CHEAP (gpt-4o-mini / a local
+// model) without touching the developer's Claude session window. Point AURALIS_RUNNER_API_URL at a local
+// server (Ollama / LM Studio) for a free background runner. `temperature` omitted for reasoning-model compat.
+export class ApiRunner implements AgentRunner {
+  constructor(private readonly opts: { url?: string; model?: string; key?: string } = {}) {}
+  async run(prompt: string): Promise<RunResult> {
+    const url = this.opts.url ?? process.env.AURALIS_RUNNER_API_URL ?? "https://api.openai.com/v1/chat/completions";
+    const model = this.opts.model ?? process.env.AURALIS_RUNNER_MODEL ?? "gpt-4o-mini";
+    const key = this.opts.key ?? process.env.AURALIS_RUNNER_API_KEY ?? process.env.OPENAI_API_KEY ?? "";
+    if (!key && !/localhost|127\.0\.0\.1/.test(url)) throw new Error("ApiRunner needs AURALIS_RUNNER_API_KEY (or OPENAI_API_KEY), or a localhost URL");
+    const r = await fetch(url, {
+      method: "POST",
+      headers: { "content-type": "application/json", ...(key ? { authorization: `Bearer ${key}` } : {}) },
+      body: JSON.stringify({ model, messages: [{ role: "user", content: prompt }] }),
+    });
+    if (!r.ok) throw new Error(`ApiRunner ${model} ${r.status}: ${(await r.text()).slice(0, 200)}`);
+    const j: any = await r.json();
+    return { result: String(j.choices?.[0]?.message?.content ?? "").trim(), explored: [] };
+  }
+}
+
+// Pick the lifecycle runner by env. Default = ClaudeCodeRunner (interactive Claude auth, current behaviour
+// for a human running `pnpm sleep`); AURALIS_RUNNER=api = the cheap, unattended API runner a scheduled
+// background job (run-lifecycle) should use so it never competes with the interactive session window.
+export function makeRunner(opts: { cwd: string; maxTurns?: number }): AgentRunner {
+  return process.env.AURALIS_RUNNER === "api" ? new ApiRunner() : new ClaudeCodeRunner(opts);
+}
+
 // Deterministic worker for tests: "explores" a fixed file list, but SKIPS any file already named in
 // its prompt — modelling an agent that reuses injected shared knowledge instead of re-reading it.
 export class StubRunner implements AgentRunner {
