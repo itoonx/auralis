@@ -26,7 +26,13 @@ function stats(xs: number[]) {
 }
 
 async function main() {
-  process.env.ORACLE_ALLOW_RESET = "1"; // let the sidecar wipe the brain between trials
+  // Isolate the bench onto a THROWAWAY oracle — it wipes the brain every trial and must NEVER touch the
+  // human's prod brain (found live: with no override, ensureOracle attached to prod). Own port + db + url so
+  // ensureOracle spawns a scratch sidecar and every adapter/worker targets it, not the daemon on 47778.
+  process.env.ORACLE_PORT ??= "47797";
+  process.env.ORACLE_DB ??= ".auralis-out/bench-brain.sqlite";
+  process.env.ORACLE_API_URL ??= `http://localhost:${process.env.ORACLE_PORT}`;
+  process.env.ORACLE_ALLOW_RESET = "1"; // let the sidecar wipe the (scratch) brain between trials
   console.log(`bench: project=${PROJECT_DIR} · trials=${TRIALS} · parallel=${CONCURRENCY}`);
   const stop = await ensureOracle();
   try {

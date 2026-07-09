@@ -102,14 +102,17 @@ export class NullMemoryAdapter implements MemoryAdapter {
   }
 }
 
-const DEFAULT_ORACLE = process.env.ORACLE_API_URL ?? "http://localhost:47778";
+// Read ORACLE_API_URL at CALL time, not import time: a caller that isolates itself onto a scratch oracle
+// (e.g. bench sets ORACLE_API_URL before ensureOracle) must be able to redirect every adapter/reachability
+// check away from the prod daemon. A frozen const captured at import silently sent bench back to prod.
+const oracleUrl = () => process.env.ORACLE_API_URL ?? "http://localhost:47778";
 // Production auth: when ORACLE_TOKEN is set (matching the sidecar's), every call carries the bearer.
 const AUTH: Record<string, string> = process.env.ORACLE_TOKEN ? { authorization: `Bearer ${process.env.ORACLE_TOKEN}` } : {};
 
 export class OracleAdapter implements MemoryAdapter {
   private readonly searchPath = process.env.ORACLE_SEARCH_PATH ?? "/api/search";
   private readonly learnPath = process.env.ORACLE_LEARN_PATH ?? "/api/learn";
-  constructor(private readonly baseUrl: string = DEFAULT_ORACLE) {}
+  constructor(private readonly baseUrl: string = oracleUrl()) {}
 
   async search(query: string, opts: { limit?: number; project?: string; asOf?: string; explain?: boolean; expand?: boolean } = {}): Promise<SearchHit[]> {
     const u = new URL(this.searchPath, this.baseUrl);
@@ -282,7 +285,7 @@ export class OracleAdapter implements MemoryAdapter {
   }
 }
 
-export async function oracleReachable(baseUrl: string = DEFAULT_ORACLE): Promise<boolean> {
+export async function oracleReachable(baseUrl: string = oracleUrl()): Promise<boolean> {
   try {
     const res = await fetch(new URL("/health", baseUrl), { signal: AbortSignal.timeout(2_000) });
     return res.ok;
