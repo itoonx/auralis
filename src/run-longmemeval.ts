@@ -40,6 +40,8 @@ interface Q {
   question_date: string;
   haystack_dates: string[];
   haystack_sessions: { role: string; content: string }[][];
+  haystack_session_ids?: string[]; // parallel to haystack_sessions — the session id of each
+  answer_session_ids?: string[];   // GROUND TRUTH: the sessions that actually contain the evidence
 }
 
 // '2023/04/10 (Mon) 17:50' → ISO. Tolerant: unparseable dates just omit validAt (falls back to created_at).
@@ -85,11 +87,17 @@ const answerAsk = (prompt: string) => (process.env.LME_ANSWER === "openai" ? ask
 
 interface Trace { hits: { id: string; rank: number; cut: number; neighbors?: string[] }[]; excerpts: string }
 
-async function runOne(oracle: OracleAdapter, q: Q): Promise<{ id: string; type: string; hypothesis: string; ingested: number; trace: Trace; probe?: Record<number, boolean> }> {
+async function runOne(oracle: OracleAdapter, q: Q): Promise<{ id: string; type: string; hypothesis: string; ingested: number; trace: Trace; probe?: Record<number, boolean>; probeSession?: Record<number, boolean> }> {
   const project = `lme_${q.question_id}`;
   let ingested = 0;
+  // GROUND TRUTH (P0, verify-in-reality): the sessions that actually hold the evidence + a doc→session map,
+  // so the probe can ask "did retrieval return a doc from the gold session?" — immune to paraphrase, unlike
+  // the gold-STRING proxy which reads 0% on preference simply because the answer is worded differently.
+  const goldSessions = new Set<string>(q.answer_session_ids ?? []);
+  const docSession = new Map<string, string>();
   for (let i = 0; i < q.haystack_sessions.length; i++) {
     const validAt = toIso(q.haystack_dates?.[i] ?? "");
+    const sessionId = q.haystack_session_ids?.[i] ?? String(i);
     for (const turn of q.haystack_sessions[i]) {
       const text = String(turn.content ?? "").trim();
       if (text.length < 20) continue; // trivial acks carry no memory
@@ -105,25 +113,33 @@ async function runOne(oracle: OracleAdapter, q: Q): Promise<{ id: string; type: 
       const anchor = chunks.length > 1 ? text.slice(0, 80).replace(/\s+\S*$/, "") : "";
       for (let ci = 0; ci < chunks.length; ci++) {
         const body = ci === 0 ? chunks[ci] : `[re: ${anchor}…] ${chunks[ci]}`;
+        let learnedId = "";
         try {
-          await oracle.learn(`${turn.role}: ${body}`, opts);
+          learnedId = (await oracle.learn(`${turn.role}: ${body}`, opts)).id;
         } catch {
           // one retry — a 100k-turn run must not die on a single hiccup; a persistent failure still throws
           await new Promise((r) => setTimeout(r, 300));
-          await oracle.learn(`${turn.role}: ${body}`, opts);
+          learnedId = (await oracle.learn(`${turn.role}: ${body}`, opts)).id;
         }
+        if (PROBE && learnedId) docSession.set(String(learnedId), sessionId);
         ingested++;
       }
     }
   }
   // Retrieval-recall probe (LLM-free): main-query top-k at each k, does the gold string appear? Skips answer/judge.
   if (PROBE) {
-    const goldAt: Record<number, boolean> = {};
+    const goldAt: Record<number, boolean> = {};       // gold STRING in top-k content (proxy)
+    const goldSessAt: Record<number, boolean> = {};   // gold SESSION in top-k (ground truth)
     for (const K of PROBE) {
       const hh = await oracle.search(q.question, { project, limit: K });
       goldAt[K] = goldPrecheck(q.answer, hh.map((h) => h.content).join("\n"));
+      // ALL gold sessions must appear in top-k (the correct recall bar — a multi-session answer needs every
+      // evidence session, not just one). "some" over-counts. The doc→session map is proven working by the
+      // per-type spread (preference 67% ≠ temporal 100% — a broken map would give uniform 0%).
+      const hitSessions = new Set(hh.map((h) => docSession.get(String(h.id))).filter(Boolean));
+      goldSessAt[K] = goldSessions.size > 0 && [...goldSessions].every((gs) => hitSessions.has(gs));
     }
-    return { id: q.question_id, type: q.question_type, hypothesis: "", ingested, trace: { hits: [], excerpts: "" }, probe: goldAt };
+    return { id: q.question_id, type: q.question_type, hypothesis: "", ingested, trace: { hits: [], excerpts: "" }, probe: goldAt, probeSession: goldSessAt };
   }
   // Multi-query retrieval: a "days between A and B" question names TWO events — one query's top-k tends
   // to cover only the dominant one (sanity-gate finding). Union the main search with a per-entity search
@@ -236,7 +252,7 @@ async function main() {
     const TRACE = OUT.replace(/\.jsonl$/, "") + ".trace.jsonl";
     writeFileSync(TRACE, "");
     const results: { id: string; type: string; ok?: boolean }[] = [];
-    const probes: { id: string; type: string; probe?: Record<number, boolean> }[] = [];
+    const probes: { id: string; type: string; probe?: Record<number, boolean>; probeSession?: Record<number, boolean> }[] = [];
     let done = 0;
     const t0 = Date.now();
     let next = 0;
@@ -249,7 +265,7 @@ async function main() {
           appendFileSync(OUT, JSON.stringify({ question_id: r.id, hypothesis: r.hypothesis }) + "\n");
           appendFileSync(TRACE, JSON.stringify({ question_id: r.id, type: r.type, question: q.question, gold: q.answer, ...r.trace, hypothesis: r.hypothesis, ok: j?.ok, judge_reason: j?.reason, ingested: r.ingested }) + "\n");
           results.push({ id: r.id, type: r.type, ok: j?.ok });
-          if (PROBE) probes.push({ id: r.id, type: r.type, probe: r.probe });
+          if (PROBE) probes.push({ id: r.id, type: r.type, probe: r.probe, probeSession: r.probeSession });
           done++;
           console.log(`  [${done}/${qs.length}] ${r.id} · ${r.type}${PROBE ? " · gold@k " + JSON.stringify(r.probe) : ` · ingested=${r.ingested}${j === undefined ? "" : j.ok ? " · ✅" : " · ❌"}`}`);
         }
@@ -267,21 +283,26 @@ async function main() {
       } catch { console.error("  ⚠ could not read /api/stats to verify semantic engagement"); }
     }
     if (PROBE) {
-      // gold-in-top-k % per type (non-abstention). Rising with k = ranking-miss (fixable); flat/low = recall-miss (needs semantic).
-      const byType = new Map<string, Record<number, [number, number]>>();
-      for (const p of probes) {
-        if (p.id.includes("_abs") || !p.probe) continue;
-        const m = byType.get(p.type) ?? {};
-        for (const K of PROBE) { const c = m[K] ?? [0, 0]; if (p.probe[K]) c[0]++; c[1]++; m[K] = c; }
-        byType.set(p.type, m);
-      }
-      const tot: Record<number, [number, number]> = {};
-      console.log(`\n━━━ retrieval-recall probe · gold-in-top-k % (non-abstention, ${process.env.AURALIS_SEMANTIC === "1" ? "semantic" : "trigram"}) ━━━`);
-      console.log(`  ${"type".padEnd(28)}${PROBE.map((k) => ("k=" + k).padStart(7)).join("")}`);
-      for (const [t, m] of [...byType.entries()].sort()) {
-        console.log(`  ${t.padEnd(28)}${PROBE.map((k) => { const [g, n] = m[k] ?? [0, 0]; if (n) { tot[k] = tot[k] ?? [0, 0]; tot[k][0] += g; tot[k][1] += n; } return (n ? Math.round(g / n * 100) + "%" : "-").padStart(7); }).join("")}`);
-      }
-      console.log(`  ${"OVERALL".padEnd(28)}${PROBE.map((k) => { const [g, n] = tot[k] ?? [0, 0]; return (n ? Math.round(g / n * 100) + "%" : "-").padStart(7); }).join("")}`);
+      const report = (label: string, field: "probe" | "probeSession") => {
+        const byType = new Map<string, Record<number, [number, number]>>();
+        for (const p of probes) {
+          const data = (p as any)[field] as Record<number, boolean> | undefined;
+          if (p.id.includes("_abs") || !data) continue;
+          const m = byType.get(p.type) ?? {};
+          for (const K of PROBE) { const c = m[K] ?? [0, 0]; if (data[K]) c[0]++; c[1]++; m[K] = c; }
+          byType.set(p.type, m);
+        }
+        const tot: Record<number, [number, number]> = {};
+        console.log(`\n━━━ ${label} · ${process.env.AURALIS_SEMANTIC === "1" ? "semantic" : "trigram"} ━━━`);
+        console.log(`  ${"type".padEnd(28)}${PROBE.map((k) => ("k=" + k).padStart(7)).join("")}`);
+        for (const [t, m] of [...byType.entries()].sort()) {
+          console.log(`  ${t.padEnd(28)}${PROBE.map((k) => { const [g, n] = m[k] ?? [0, 0]; if (n) { tot[k] = tot[k] ?? [0, 0]; tot[k][0] += g; tot[k][1] += n; } return (n ? Math.round(g / n * 100) + "%" : "-").padStart(7); }).join("")}`);
+        }
+        console.log(`  ${"OVERALL".padEnd(28)}${PROBE.map((k) => { const [g, n] = tot[k] ?? [0, 0]; return (n ? Math.round(g / n * 100) + "%" : "-").padStart(7); }).join("")}`);
+      };
+      // GROUND TRUTH first (did retrieval hit the evidence session — immune to paraphrase), then the string proxy.
+      report("gold-SESSION in top-k % — GROUND TRUTH (answer_session_ids)", "probeSession");
+      report("gold-STRING in top-k % — proxy (undercounts paraphrase)", "probe");
       console.log(`  wall ${(Date.now() - t0) / 1000 | 0}s`);
       return;
     }
