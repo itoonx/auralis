@@ -23,6 +23,10 @@ const JUDGE_MODEL = process.env.LME_JUDGE_MODEL ?? "gpt-5"; // openai judge mode
 const LIMIT = Number(process.env.LME_LIMIT ?? 0);
 const CONC = Number(process.env.LME_CONCURRENCY ?? 3);
 const EXPAND = process.env.LME_EXPAND !== "0"; // M2 adjacency (default ON = shipped); LME_EXPAND=0 = pre-M2 baseline arm
+// Every ask()/judge query() below is an SDK sub-session that inherits this repo's Claude Code hooks. Without
+// this, session-capture writes each benchmark answer-prompt into the HUMAN's prod brain (found live: 89 LME
+// docs leaked). The spawned CLI inherits process.env, so setting it here stands the hook down for sub-queries.
+process.env.AURALIS_NO_CAPTURE = "1";
 
 interface Q {
   question_id: string;

@@ -57,6 +57,17 @@ describe("session-capture ingress", () => {
     }
   });
 
+  it("AURALIS_NO_CAPTURE stands down (benchmark/harness sub-queries must not leak into the human's brain)", () => {
+    process.env.AURALIS_NO_CAPTURE = "1";
+    try {
+      const prompt = "Today is 2023/02/15. Below are excerpts from the user's past chat sessions. Question: what dessert shop?";
+      expect(route({ ...base, hook_event_name: "UserPromptSubmit", prompt })).toEqual([]);
+      expect(route({ ...base, hook_event_name: "Stop", transcript_path: "/nonexistent" })).toEqual([]);
+    } finally {
+      delete process.env.AURALIS_NO_CAPTURE;
+    }
+  });
+
   it("Write/Edit → observability trace only, never learn (traces must not pollute recall)", () => {
     const a = route({ ...base, hook_event_name: "PostToolUse", tool_name: "Write", tool_input: { file_path: "src/x.ts" } });
     expect(a).toHaveLength(1);

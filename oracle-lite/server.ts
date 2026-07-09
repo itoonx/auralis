@@ -141,12 +141,17 @@ if (typeof sweepTimer.unref === "function") sweepTimer.unref();
 // cheap insurance the research flagged as the one "git for memory" idea worth keeping. Keep the last 5.
 const BACKUP_DIR = `${dbDirOf(DB_PATH)}backups`;
 function dbDirOf(p: string): string { return p.replace(/[^/]*$/, "") || "./"; }
+// Retention is per-BRAIN, not per-directory: brains sharing a dir (brain.sqlite, test-brain.sqlite,
+// sem-demo.sqlite all under .auralis-out/) must not evict each other's snapshots. Found live (dogfooding):
+// a burst of test/demo sleep snapshots flushed the real prod snapshots out of the shared 5-slot window, so
+// a later corruption had no restore point. Tag each snapshot with the brain's basename; prune only its own.
+const DB_BASE = DB_PATH.replace(/^.*\//, "").replace(/\.[^.]*$/, "") || "brain";
 function snapshot(reason: string): string {
   mkdirSync(BACKUP_DIR, { recursive: true });
-  const file = `${BACKUP_DIR}/pre-${reason}-${new Date().toISOString().replace(/[:.]/g, "-")}.db`;
+  const file = `${BACKUP_DIR}/pre-${DB_BASE}-${reason}-${new Date().toISOString().replace(/[:.]/g, "-")}.db`;
   db.run(`VACUUM INTO '${file.replace(/'/g, "''")}'`);
-  const old = readdirSync(BACKUP_DIR).filter((f) => f.endsWith(".db")).sort().reverse().slice(5);
-  for (const f of old) rmSync(`${BACKUP_DIR}/${f}`, { force: true });
+  const mine = readdirSync(BACKUP_DIR).filter((f) => f.startsWith(`pre-${DB_BASE}-`) && f.endsWith(".db")).sort().reverse().slice(5);
+  for (const f of mine) rmSync(`${BACKUP_DIR}/${f}`, { force: true });
   return file;
 }
 

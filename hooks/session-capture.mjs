@@ -26,7 +26,9 @@ export function route(payload) {
 
   // Fleet workers are Claude subprocesses that inherit this repo's hooks — their prompts/answers are NOT
   // the human's session. Found live: a worker prompt landed as a trust-1.0 "human instruction". Stand down.
-  if (process.env.AURALIS_FLEET) return actions;
+  // AURALIS_NO_CAPTURE covers the same hazard for benchmark/harness SDK sub-queries (pnpm lme): found live —
+  // 89 LongMemEval answer-prompts leaked into the prod brain because the hook fires on those sub-sessions too.
+  if (process.env.AURALIS_FLEET || process.env.AURALIS_NO_CAPTURE) return actions;
 
   if (kind === "UserPromptSubmit") {
     const prompt = String(payload?.prompt ?? "").trim();
