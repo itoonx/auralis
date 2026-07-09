@@ -84,6 +84,21 @@ the chunk), user + knowledge-update 14/15.
 **This corrects the Non-goal below:** the answer prompt is NOT a 16%-secondary lever — the reader owns ~46%
 of losses (heavily multi-session + temporal). Re-weight R6 (reader) upward when re-deriving the milestones.
 
+**L3 (root-cause forensic on the 10 evidence-miss questions): ✅ FOUND + FIXED — the FTS query was broken.**
+Forensic (per-question rank of every ground-truth evidence chunk, oracle on the live scratch brain):
+ALL evidence was IN the brain; it lost at query time. Two server bugs in `sanitize()`/FTS:
+1. **`slice(0, 8)` token cap** — a long NL question queried only its first 8 non-stopword words:
+   "…what color was the Plesiosaur?" NEVER queried "Plesiosaur" (all 5 evidence chunks rank >500 → rank 2–6
+   after the fix). Cap → 24 (degenerate-input guard only). Also added `my me our am if` to stopwords.
+2. **No stemming** (unicode61): "projects"≠"project", "kits"≠"kit", "trips"≠"trip" — 4/10 questions. Fix:
+   `tokenize='porter unicode61'` + boot migration that REBUILDS `docs_fts` from `docs` on old brains
+   (verified live: 104,450/104,450 rows; aborts if incomplete — no silent degraded index).
+Full-500 dump after fix, NO regression anywhere: chunk∃ 84→**94%**, evidALL 71→**81%** (assistant 63→98,
+preference 53→73, temporal 58→74). End-to-end subset90: **79/90 (88%)** vs 77 (v2) vs 55 (v1); the −2/+2
+flips vs v2 are reader sampling noise (evidence verified present both rounds). Remaining ~5 real losses:
+2 pure-paraphrase (doctors↔Dr., dinner↔basil/mint — the ONLY true R4/semantic residual), 2 common-term
+dilution on counting questions (R3 exhaustive), 1-2 temporal gold quirks.
+
 **Bug still owed:** single-row `vectorAdd` (`server.ts:349`, runs even on trigram) bloats LanceDB per-`learn`
 until `learn` times out ~q13; workaround `ORACLE_NO_VECTORS=1` (500-Q probe completes in ~200s). Real fix = batch+serialize.
 

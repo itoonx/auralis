@@ -53,7 +53,22 @@ db.run(`CREATE TABLE IF NOT EXISTS docs (
   id TEXT PRIMARY KEY, content TEXT NOT NULL, concepts TEXT, project TEXT, source TEXT, created_at TEXT,
   superseded_by TEXT, superseded_at TEXT, superseded_reason TEXT
 );`);
-db.run(`CREATE VIRTUAL TABLE IF NOT EXISTS docs_fts USING fts5(id UNINDEXED, content, concepts);`);
+// Porter stemming (forensic root-cause #2): unstemmed FTS made "projects" miss "project", "kits" miss
+// "kit", "trips" miss "trip" — 4/10 evidence-miss questions. docs_fts is derived state (docs is the source
+// of truth), so an old-tokenizer brain migrates by rebuild — logged, counted, verified (no silent no-op).
+db.run(`CREATE VIRTUAL TABLE IF NOT EXISTS docs_fts USING fts5(id UNINDEXED, content, concepts, tokenize='porter unicode61');`);
+{
+  const ftsDef = String((db.query("SELECT sql FROM sqlite_master WHERE name='docs_fts'").get() as any)?.sql ?? "");
+  if (!/porter/.test(ftsDef)) {
+    db.run("DROP TABLE docs_fts;");
+    db.run(`CREATE VIRTUAL TABLE docs_fts USING fts5(id UNINDEXED, content, concepts, tokenize='porter unicode61');`);
+    db.run("INSERT INTO docs_fts (id, content, concepts) SELECT id, content, concepts FROM docs;");
+    const docsN = Number((db.query("SELECT COUNT(*) AS c FROM docs").get() as any)?.c ?? 0);
+    const ftsN = Number((db.query("SELECT COUNT(*) AS c FROM docs_fts").get() as any)?.c ?? 0);
+    console.error(`docs_fts: rebuilt with porter stemming — ${ftsN}/${docsN} rows`);
+    if (ftsN !== docsN) { console.error("!!!! docs_fts rebuild INCOMPLETE — refusing to serve a degraded index"); process.exit(1); }
+  }
+}
 try { db.run("ALTER TABLE docs ADD COLUMN tier TEXT DEFAULT 'raw';"); } catch { /* column already exists */ }
 // Ranking v2 columns (U1+U2, docs/research-memory-os.md): trust prior set at learn from the source;
 // access/usage counters power the recency+usage boosts. Additive — an existing brain upgrades in place.
@@ -232,13 +247,17 @@ if (typeof sleepTimer.unref === "function") sleepTimer.unref();
 // this (boosts amplified off-topic docs that only shared "the"/"is"). Standard IR practice; helps real recall too.
 const STOPWORDS = new Set(
   ("a an and are as at be been being but by can could did do does doing for from had has have how in into is it its of on or " +
-   "that the their this to was were what when where which who why will with would you your").split(" "),
+   "that the their this to was were what when where which who why will with would you your " +
+   "my me our am if").split(" "), // pronouns/aux the forensic showed burning query slots while matching every chunk
 );
 function sanitize(q: string): string {
   const raw = (q.toLowerCase().match(/[\p{L}\p{N}_]+/gu) ?? []).filter((t) => t.length > 1);
   const kept = raw.filter((t) => !STOPWORDS.has(t));
   const toks = kept.length ? kept : raw; // an all-stopword query keeps them rather than matching nothing
-  const uniq = [...new Set(toks)].slice(0, 8);
+  // Root-cause fix (forensic, 10 evidence-miss questions): slice(0, 8) DROPPED the discriminative terms of
+  // any long NL question — "…what color was the Plesiosaur?" queried only its first 8 words and never
+  // "Plesiosaur". 24 covers real questions; the cap stays as a degenerate-input guard only.
+  const uniq = [...new Set(toks)].slice(0, 24);
   return uniq.length ? uniq.map((t) => `"${t}"`).join(" OR ") : '"_"';
 }
 // Collision-proof under concurrency: timestamp+slug alone collided when parallel learns landed in the
