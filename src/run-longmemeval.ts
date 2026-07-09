@@ -18,9 +18,11 @@ const PORT = Number(process.env.LME_PORT ?? 47799);
 const BASE = `http://localhost:${PORT}`;
 const DATA = process.env.LME_DATA ?? `${SCRATCH}/longmemeval_s.json`;
 const OUT = process.env.LME_OUT ?? `${SCRATCH}/hypotheses.jsonl`;
-const JUDGE = process.env.LME_JUDGE ?? "claude";
+const JUDGE = process.env.LME_JUDGE ?? "claude"; // claude | openai | none
+const JUDGE_MODEL = process.env.LME_JUDGE_MODEL ?? "gpt-5"; // openai judge model — override if the id differs
 const LIMIT = Number(process.env.LME_LIMIT ?? 0);
 const CONC = Number(process.env.LME_CONCURRENCY ?? 3);
+const EXPAND = process.env.LME_EXPAND !== "0"; // M2 adjacency (default ON = shipped); LME_EXPAND=0 = pre-M2 baseline arm
 
 interface Q {
   question_id: string;
@@ -51,6 +53,22 @@ async function ask(prompt: string): Promise<string> {
   }
   return out.trim();
 }
+
+// OpenAI judge backend (LME_JUDGE=openai). A cross-family verdict: avoids Claude judging Claude
+// (self-preference bias) and moves the internal number toward the official GPT-4o protocol. Plain
+// fetch — no SDK dependency. `temperature` omitted so reasoning models that reject it don't 400.
+async function askOpenAI(prompt: string): Promise<string> {
+  if (!process.env.OPENAI_API_KEY) throw new Error("LME_JUDGE=openai needs OPENAI_API_KEY");
+  const r = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
+    body: JSON.stringify({ model: JUDGE_MODEL, messages: [{ role: "user", content: prompt }] }),
+  });
+  if (!r.ok) throw new Error(`openai judge ${r.status}: ${(await r.text()).slice(0, 200)}`);
+  const j: any = await r.json();
+  return String(j.choices?.[0]?.message?.content ?? "").trim();
+}
+const judgeAsk = (prompt: string) => (JUDGE === "openai" ? askOpenAI(prompt) : ask(prompt));
 
 interface Trace { hits: { id: string; rank: number; cut: number; neighbors?: string[] }[]; excerpts: string }
 
@@ -91,7 +109,7 @@ async function runOne(oracle: OracleAdapter, q: Q): Promise<{ id: string; type: 
   const seen = new Map<string, (typeof hits0)[number]>();
   // M2 adjacency expansion: top hits carry their insertion-order neighbours — the answer to
   // "what came after X" sits in the chunk NEXT to the one that matches the question's words.
-  const hits0 = await oracle.search(q.question, { project, limit: 8, expand: true });
+  const hits0 = await oracle.search(q.question, { project, limit: 8, expand: EXPAND });
   for (const h of hits0) seen.set(h.id, h);
   for (const ent of extractEntities(q.question).slice(0, 3)) {
     for (const h of await oracle.search(ent, { project, limit: 4 })) if (!seen.has(h.id)) seen.set(h.id, h);
@@ -150,7 +168,7 @@ async function judgeOne(q: Q, hypothesis: string): Promise<{ ok: boolean; reason
   if (!abstention && goldPrecheck(q.answer, hypothesis)) return { ok: true, reason: "gold-precheck: gold string present verbatim" };
   // Sanity-gate finding: the judge failed "Two: Dr. Smith…" against gold `2` and penalised correct
   // abstentions — be explicit that equivalence (number words, extra explanation) counts as correct.
-  const verdict = await ask(
+  const verdict = await judgeAsk(
     abstention
       ? `This question has NO answer in the source material; the correct behaviour is to decline.\n` +
           `Question: ${q.question}\nResponse: ${hypothesis}\n` +
@@ -204,7 +222,7 @@ async function main() {
         for (let i = next++; i < qs.length; i = next++) {
           const q = qs[i];
           const r = await runOne(oracle, q);
-          const j = JUDGE === "claude" ? await judgeOne(q, r.hypothesis) : undefined;
+          const j = JUDGE !== "none" ? await judgeOne(q, r.hypothesis) : undefined;
           appendFileSync(OUT, JSON.stringify({ question_id: r.id, hypothesis: r.hypothesis }) + "\n");
           appendFileSync(TRACE, JSON.stringify({ question_id: r.id, type: r.type, question: q.question, gold: q.answer, ...r.trace, hypothesis: r.hypothesis, ok: j?.ok, judge_reason: j?.reason, ingested: r.ingested }) + "\n");
           results.push({ id: r.id, type: r.type, ok: j?.ok });
@@ -215,7 +233,7 @@ async function main() {
     );
 
     console.log(`\n━━━ LongMemEval (${process.env.AURALIS_SEMANTIC === "1" ? "semantic" : "trigram"} · judge=${JUDGE} · INTERNAL numbers) ━━━`);
-    if (JUDGE === "claude") {
+    if (JUDGE !== "none") {
       const byType = new Map<string, { n: number; ok: number }>();
       for (const r of results) {
         const t = byType.get(r.type) ?? { n: 0, ok: 0 };
@@ -228,7 +246,7 @@ async function main() {
         N += v.n; OK += v.ok;
       }
       console.log(`  ${"TOTAL".padEnd(28)} ${OK}/${N}  (${((OK / N) * 100).toFixed(0)}%)`);
-      console.log(`  (Claude-judge = iteration numbers; official comparability needs evaluate_qa.py + GPT-4o)`);
+      console.log(`  (judge=${JUDGE}${JUDGE === "openai" ? " " + JUDGE_MODEL : ""} → iteration numbers; official comparability needs evaluate_qa.py + GPT-4o)`);
       // Failure-class report: questions tagged by a past failure analysis (bench/lme/failure-tags.json)
       // — each milestone must prove it moved ITS class and regressed nothing else.
       let tags: Record<string, string> = {};

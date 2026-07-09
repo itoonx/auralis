@@ -89,6 +89,17 @@ lane behind a flag.
 **Gate:** pooled-100 assistant class improves beyond the noise bar with no regression elsewhere;
 `pnpm bench` recall benches don't regress. **Effort:** ~1 day. **Risk:** context growth — bound
 it (neighbours only for top-3 hits).
+**❌ Result (gate NOT passed, 3× pooled-100, expand ON via CLI):** TOTAL 80/80/75 → mean **78.3**
+(vs baseline 79.3 ± 1.5 — delta −1.0, inside noise). neighbor-chunk class **0/3, 1/3, 1/3** — did
+not move (run-to-run flips are answer variance, not adjacency). Per the M1 decision rule, M2 lands
+neither test. **Root cause (from the M1 traces):** all 3 neighbor-chunk questions fail because the
+gold never reaches the answer stage — base retrieval misses the anchor chunk, so adjacency has
+nothing to expand (it only pulls neighbours of top-3 hits). The tag was mis-diagnosed: 1/3 is a
+true seam (chess notation — a stated non-goal), the other 2 (Sugar Factory, Patagonia) are
+retrieval-recall/semantic misses adjacency can't fix. **Decision:** keep the mechanism (default-OFF
+flag, cheap, regresses nothing, real product story) but do NOT credit it as a benchmark win; the
+real lever is retrieval **recall**, which fires the Deferred semantic-embedder re-A/B trigger
+("real paraphrase misses" — now on evidence, not vibes).
 
 ### M3 · Answer rules v2 — premise check + "today" inference
 **Why:** false-premise questions failed 2/2 identically on both subsets (confident wrong answer,
