@@ -2,8 +2,10 @@
 
 Where the platform is headed. Ordered by leverage (timing tells us which knob actually moves the needle).
 
-> **Active phase (2026-07-09):** `docs/prd-next-phase.md` — fix the measurement layer, then close the
-> three validated recall gaps (adjacency, aggregation, premise-check), ending in the P4 public number.
+> **Active phase (2026-07-10):** `docs/prd-fix-recall.md` — the P4 official number is 53.4% (below
+> full-context) and 84% of losses are RETRIEVAL-recall, not the reader. Fix the semantic instrument, build a
+> controlled memory-vs-full-context delta, then close recall on paraphrase / aggregation / temporal.
+> Prior phase `docs/prd-next-phase.md` (M1–M6 + P4) is done — its embedder "closed" verdict is retracted there.
 
 - **Memory-OS upgrades — complete (U1–U7), all shipped and measured** (`docs/research-memory-os.md`):
   RRF+trust ranking, citation feedback, forgetting-as-ranking, bi-temporal validity with `as_of` queries,
