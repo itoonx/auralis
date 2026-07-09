@@ -1,23 +1,47 @@
-# PRD — Fix Recall: auralis loses at retrieval, close the gap honestly
+# PRD — Fix Recall: the loss is chunk-granularity + answer-extraction, NOT session recall
 
-Date: 2026-07-10 · Status: direction proposed, tasks not yet broken down
-Basis: the P4 official run + failure decomposition + retrieval-recall probe (session 2026-07-09→10).
-Supersedes the recall threads in `prd-next-phase.md` (M1–M6 + P4 are done; the embedder verdict there is
-retracted — see its Deferred table).
+Date: 2026-07-10 · Status: **diagnosis CORRECTED — re-deriving levers**
+Basis: the P4 official run + the retrieval-recall probe with a GROUND-TRUTH gold-session metric (P0).
+Supersedes the recall threads in `prd-next-phase.md`.
 
-## The problem, in measured facts
+## ⚠️ CORRECTION (2026-07-10) — the first diagnosis was built on a broken instrument
 
-- **Official LongMemEval_S** (GPT-4o answer + official `evaluate_qa.py` judge): **53.4%** — below
-  full-context GPT-4o (60–64), below Zep (71.2), above Mem0 (49). The self-referential 79 was inflated 26 pts.
-- **84% of answerable losses are retrieval-miss** — the gold never reaches the reader (191 vs 36 answer-miss).
-  The reader/answer stage is NOT the problem.
-- It is a **RECALL** problem, not ranking: gold-in-top-k plateaus at k=25 (12→200 moves +4 then flat).
-  **Higher-k and rank-tuning are dead levers.**
-- Recall by ability (gold-in-top-12): preference **0%**, temporal **6%**, assistant 21%, multi-session 26%
-  (we lose) vs user 86%, knowledge-update 75% (we win). ok% tracks recall almost exactly.
-- The obvious fix (semantic) is **unverified**: the harness `AURALIS_SEMANTIC` path silently no-ops
-  (byte-identical to trigram, 28s wall). When it does engage (manual test), MiniLM-L6's signal is weak —
-  a relevant doc ranks only 1.6% above an irrelevant one, so it drowns among ~1000 distractors.
+The original claim below ("84% retrieval-miss, retrieval recall is the bottleneck") was measured with a
+**gold-STRING-in-excerpts** proxy. P0 replaced it with **ground truth** (does retrieval return a doc from the
+evidence session, using `answer_session_ids`) and the picture inverts:
+
+| metric (pooled-100, trigram) | k=12 | k=50 |
+|---|---|---|
+| gold-SESSION recall (ALL evidence sessions) — GROUND TRUTH | **81%** | **93%** |
+| gold-STRING in excerpts — the old proxy | 39% | 43% |
+
+**Retrieval finds the evidence session ~always (81–93%). Retrieval recall is NOT the primary bottleneck.**
+The string proxy read 0% on preference only because the answers are paraphrased. Per-type spread (preference
+67%, temporal 63%→94%, user 100%) proves the doc→session map works.
+
+## The real problem, in corrected facts
+
+- **Official LongMemEval_S** (GPT-4o answer + official judge): **53.4%**. But session-recall is **81%** at k=12
+  — so the ~28-pt gap between "evidence session retrieved" and "answered correctly" is the target, and it is
+  NOT session retrieval.
+- **Lever 1 — within-session chunk granularity.** The right SESSION reaches top-k (81%) but the answer-bearing
+  CHUNK often doesn't (string 39%). Once a session is a hit, surface its answer chunk (adjacency/expand — the
+  old M2, now actually justified — or within-session re-rank).
+- **Lever 2 — answer-stage paraphrase extraction.** preference: session 67–83% retrieved but only 33% correct
+  and 0% verbatim — the evidence is there, worded differently; the reader must extract it. A reader/excerpt
+  problem, not retrieval.
+- **Lever 3 — k-coverage for multi-evidence.** multi-session/temporal need k>12 to cover ALL their evidence
+  sessions (multi-session 75%→94%, temporal 63%→94% from k=12→50). Coverage-aware / higher k for these.
+- **Bug (fix regardless) — LanceDB write amplification.** Single-row `vectorAdd` is ~680× bloat (12 questions
+  → 8.2GB; 112GB across runs) and was crashing every run tonight, masked as "learn timeout" (ENOSPC). Batch
+  adds + compact + make `ORACLE_RESET` drop the lancedb dir.
+- **De-prioritized:** the "stronger embedder for session recall" bet — session recall is already 81–93%, so a
+  better embedder is not the headline. It may still help CHUNK-level ranking (a smaller, separate question).
+
+---
+### (superseded — original problem statement, kept for the record)
+~~84% of answerable losses are retrieval-miss; preference 0% / temporal 6% gold-in-top-12; higher-k dead;
+semantic unverified.~~ All of this was the string-proxy artifact — see the CORRECTION above.
 
 ## The honest target (not the leaderboard)
 
