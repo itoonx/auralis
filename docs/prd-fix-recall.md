@@ -38,6 +38,55 @@ The string proxy read 0% on preference only because the answers are paraphrased.
 - **De-prioritized:** the "stronger embedder for session recall" bet — session recall is already 81–93%, so a
   better embedder is not the headline. It may still help CHUNK-level ranking (a smaller, separate question).
 
+## SESSION-2 UPDATE (2026-07-10 cont.) — ground-truth CHUNK probe + correct-column pin the levers
+
+The dataset carries a turn-level `has_answer` flag → built a GROUND-TRUTH chunk-recall probe (evidence-turn
+chunk in top-k, paraphrase-immune) and a chunk-in-hand × correct confusion (`LME_DUMP` retrieval dump +
+Claude-Code reader/judge; Agent-SDK credit was out). Both wired into `run-longmemeval.ts` (uncommitted).
+
+| ruler | number | reading |
+|---|---|---|
+| session recall (ground truth) | 77%@12 / 92%@50 | finding the evidence session is ~solved |
+| **CHUNK recall (ground truth, main-query probe)** | **82%@12 / 90%@50** | the answer chunk is usually retrievable |
+| chunk-in-hand in the ANSWER PATH | **69%** | the answer path under-serves vs the probe (−13 pts) |
+| correct (Claude self-answer+judge, 90-Q subset) | 61% | optimistic vs official gpt-4o 53% (self-judge is generous) |
+
+**Lever attribution — of the WRONG answers: Lever 1 (chunk never retrieved) 54% · Lever 2 (chunk in hand,
+reader failed) 46%.** It is NOT a single lever. The string-proxy diagnosis AND the "reader is the sole
+bottleneck" read (from probe 82%) were both too fast — correct-column split it ~half/half.
+
+Per-type (subset, 15/type): multi-session 2/15 (worst — reader can't aggregate across sessions), temporal
+8/15 (reader can't anchor/compute dates though the chunk is present), preference miss-heavy (retrieval drops
+the chunk), user + knowledge-update 14/15.
+
+**Two real levers going forward:**
+- **L1 retrieval: ✅ FIXED + VERIFIED.** The answer path did `search(limit:8)` with entity-union filling to 12
+  — main-query ranks 9–12 were evicted. Fix: main query keeps its full top-12, entity hits supplement after
+  (same 4-slot budget, cap 16). Verified: subset90 69%→73% = that subset's probe ceiling exactly (every type
+  matches the probe row); full-500 answer-path chunk-in-hand = **83% ≥ probe 82%**. (Note: the earlier
+  "13-pt drop" compared subset-69% against full-set-82% — sloppy; the true self-inflicted loss on subset90
+  was 4 pts, now fully recovered.) `LME_EXPAND=0` had ruled out M2 expand as the cause.
+- **L2: ✅ FIXED + MEASURED (+25 pts on the same instrument).** "Reader failure" decomposed into three
+  mechanisms (measured, full-500 dump): **(a) multi-evidence COVERAGE** — chunk∃ 83% but evidALL only 56%
+  (multi-session 35%, temporal 39%): the other anchor sat at rank 13–48. Two selection tricks failed
+  (one-per-unseen-session 57%, per-session≤2 59%); fix = show the whole top-48 (full-context scores 60–64,
+  so breadth is safe; still ≥10× compression) → evidALL 71% = the pool ceiling. Remainder is a QUERY gap →
+  R4. **(b) TRUNCATION** — the 400-char tail cut chopped the answer out of 11/470 questions (chunks are
+  ≤600); cut → 700, loss = 0. **(c) reader aggregation** — added a counting/how-many rule (enumerate every
+  mention across excerpts, then count/sum) to the answer prompt.
+  **End-to-end (90-Q subset, Claude reader+separate strict judge, same instrument both arms): 55/90 (61%) →
+  77/90 (86%).** multi-session 2→9, assistant 7→13, preference 10→14, temporal 8→11, ku/user 15/15.
+  Of the 13 still wrong: **10 = evidence not retrieved (query gap → R4 expansion), only 3 = true reader**
+  (2 temporal off-by-one date arithmetic, 1 count). NOT comparable to the official 53.4% (different
+  reader+judge); the v1→v2 delta is the valid signal. Instrument note: v2 fixed two v1 flaws (gold visible
+  to reader; Read-tool line-truncation risk) — v1's gold-peek biased it UP, so the true delta is ≥ this.
+
+**This corrects the Non-goal below:** the answer prompt is NOT a 16%-secondary lever — the reader owns ~46%
+of losses (heavily multi-session + temporal). Re-weight R6 (reader) upward when re-deriving the milestones.
+
+**Bug still owed:** single-row `vectorAdd` (`server.ts:349`, runs even on trigram) bloats LanceDB per-`learn`
+until `learn` times out ~q13; workaround `ORACLE_NO_VECTORS=1` (500-Q probe completes in ~200s). Real fix = batch+serialize.
+
 ---
 ### (superseded — original problem statement, kept for the record)
 ~~84% of answerable losses are retrieval-miss; preference 0% / temporal 6% gold-in-top-12; higher-k dead;
@@ -112,6 +161,17 @@ real win condition. **Effort:** one unattended run + ~$10.
 Isolate the −17 Claude>GPT-4o gap: run Claude-answer + official judge (auralis's real-deployment number,
 officially judged) and/or GPT-4o-answer with a GPT-4o-tuned prompt. Tells us whether auralis's real number
 is higher and whether the prompt is the fixable part. **Effort:** one run each. **Slot:** anywhere after R1.
+
+## Deferred option (post-phase) — BGE-M3 embedder swap
+
+Proposed 2026-07-10, parked by decision. The ONLY validated reason to adopt BGE-M3 is **multilingual
+(Thai/Vietnamese)** — trigram/MiniLM are genuinely weak there and LongMemEval (English) can never prove it;
+it needs our own Thai/Viet eval. The PRD's other premises were refuted by ground truth: retrieval is NOT the
+sole bottleneck (reader owns ~46% of losses), MiniLM was never actually measured (every run was trigram),
+English chunk recall is already 82% (narrow upside), and the biggest retrieval loss is a pipeline slot bug,
+not embedding quality. Preconditions before ANY embedder decision: LanceDB batch fix + embed queue + a real
+MiniLM-vs-trigram probe baseline. Cost note: BGE-M3 = 568M params / 1024-dim on a CPU/WASM sidecar (~26×
+MiniLM) — infra must be fixed first or it's just a slower broken run.
 
 ## Carried-over from this session (not recall — do not lose)
 

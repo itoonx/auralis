@@ -39,7 +39,7 @@ interface Q {
   answer: unknown;
   question_date: string;
   haystack_dates: string[];
-  haystack_sessions: { role: string; content: string }[][];
+  haystack_sessions: { role: string; content: string; has_answer?: boolean }[][];
   haystack_session_ids?: string[]; // parallel to haystack_sessions — the session id of each
   answer_session_ids?: string[];   // GROUND TRUTH: the sessions that actually contain the evidence
 }
@@ -87,7 +87,7 @@ const answerAsk = (prompt: string) => (process.env.LME_ANSWER === "openai" ? ask
 
 interface Trace { hits: { id: string; rank: number; cut: number; neighbors?: string[] }[]; excerpts: string }
 
-async function runOne(oracle: OracleAdapter, q: Q): Promise<{ id: string; type: string; hypothesis: string; ingested: number; trace: Trace; probe?: Record<number, boolean>; probeSession?: Record<number, boolean> }> {
+async function runOne(oracle: OracleAdapter, q: Q): Promise<{ id: string; type: string; hypothesis: string; ingested: number; trace: Trace; probe?: Record<number, boolean>; probeSession?: Record<number, boolean>; probeDoc?: Record<number, boolean>; chunkHit?: boolean | null; sessHit?: boolean | null; evidAll?: boolean | null; evidAllDeep?: boolean | null; goldStrFull?: boolean; goldStrShown?: boolean }> {
   const project = `lme_${q.question_id}`;
   let ingested = 0;
   // GROUND TRUTH (P0, verify-in-reality): the sessions that actually hold the evidence + a doc→session map,
@@ -95,6 +95,10 @@ async function runOne(oracle: OracleAdapter, q: Q): Promise<{ id: string; type: 
   // the gold-STRING proxy which reads 0% on preference simply because the answer is worded differently.
   const goldSessions = new Set<string>(q.answer_session_ids ?? []);
   const docSession = new Map<string, string>();
+  // GROUND-TRUTH chunk recall: LongMemEval_S flags the evidence turns (`has_answer`). Track which ingested
+  // docs came from an evidence turn, so the probe can ask "did the ANSWER-BEARING chunk reach top-k?" —
+  // immune to paraphrase, unlike the gold-STRING proxy. This is the honest Lever-1 (chunk granularity) ruler.
+  const goldDocs = new Set<string>();
   for (let i = 0; i < q.haystack_sessions.length; i++) {
     const validAt = toIso(q.haystack_dates?.[i] ?? "");
     const sessionId = q.haystack_session_ids?.[i] ?? String(i);
@@ -121,7 +125,10 @@ async function runOne(oracle: OracleAdapter, q: Q): Promise<{ id: string; type: 
           await new Promise((r) => setTimeout(r, 300));
           learnedId = (await oracle.learn(`${turn.role}: ${body}`, opts)).id;
         }
-        if (PROBE && learnedId) docSession.set(String(learnedId), sessionId);
+        if (learnedId) {
+          docSession.set(String(learnedId), sessionId);
+          if (turn.has_answer === true) goldDocs.add(String(learnedId)); // this chunk came from an evidence turn
+        }
         ingested++;
       }
     }
@@ -130,6 +137,7 @@ async function runOne(oracle: OracleAdapter, q: Q): Promise<{ id: string; type: 
   if (PROBE) {
     const goldAt: Record<number, boolean> = {};       // gold STRING in top-k content (proxy)
     const goldSessAt: Record<number, boolean> = {};   // gold SESSION in top-k (ground truth)
+    const goldDocAt: Record<number, boolean> = {};    // evidence CHUNK in top-k (ground truth, has_answer)
     for (const K of PROBE) {
       const hh = await oracle.search(q.question, { project, limit: K });
       goldAt[K] = goldPrecheck(q.answer, hh.map((h) => h.content).join("\n"));
@@ -138,21 +146,34 @@ async function runOne(oracle: OracleAdapter, q: Q): Promise<{ id: string; type: 
       // per-type spread (preference 67% ≠ temporal 100% — a broken map would give uniform 0%).
       const hitSessions = new Set(hh.map((h) => docSession.get(String(h.id))).filter(Boolean));
       goldSessAt[K] = goldSessions.size > 0 && [...goldSessions].every((gs) => hitSessions.has(gs));
+      // Chunk-level: did ANY evidence-turn chunk reach top-k? (some = the answer is in hand for the reader).
+      goldDocAt[K] = goldDocs.size > 0 && hh.some((h) => goldDocs.has(String(h.id)));
     }
-    return { id: q.question_id, type: q.question_type, hypothesis: "", ingested, trace: { hits: [], excerpts: "" }, probe: goldAt, probeSession: goldSessAt };
+    return { id: q.question_id, type: q.question_type, hypothesis: "", ingested, trace: { hits: [], excerpts: "" }, probe: goldAt, probeSession: goldSessAt, probeDoc: goldDocAt };
   }
   // Multi-query retrieval: a "days between A and B" question names TWO events — one query's top-k tends
   // to cover only the dominant one (sanity-gate finding). Union the main search with a per-entity search
   // so every named event gets its own shot. Deterministic, no LLM.
+  // Leak #1 fix (correct-column session): the main query used to get only limit:8 with entity hits filling
+  // to 12 — main-query ranks 9–12 were EVICTED, collapsing chunk-in-hand to 69% vs the probe's 82%. Now the
+  // main query keeps its full top-12 (matching the probe) and entity hits SUPPLEMENT after it (same 4-slot
+  // budget, cap 16) — union may only ever add evidence, never displace it.
   const seen = new Map<string, (typeof hits0)[number]>();
   // M2 adjacency expansion: top hits carry their insertion-order neighbours — the answer to
   // "what came after X" sits in the chunk NEXT to the one that matches the question's words.
-  const hits0 = await oracle.search(q.question, { project, limit: 8, expand: EXPAND });
-  for (const h of hits0) seen.set(h.id, h);
+  const hits0 = await oracle.search(q.question, { project, limit: 48, expand: EXPAND });
+  for (const h of hits0.slice(0, 12)) seen.set(h.id, h);
   for (const ent of extractEntities(q.question).slice(0, 3)) {
     for (const h of await oracle.search(ent, { project, limit: 4 })) if (!seen.has(h.id)) seen.set(h.id, h);
   }
-  const hits = [...seen.values()].slice(0, 12);
+  // Leak-#2a fix — multi-evidence COVERAGE: chunk∃ was 83% but evidALL only 56% (multi-session 35%,
+  // temporal 39%) — the other anchors sat at rank 13–48. Two selection tricks failed (one-per-unseen-session
+  // 57%, per-session≤2 59% — a 24-slot budget never reaches rank 35+). Full-context scores 60–64 with the
+  // ENTIRE haystack, so the reader tolerates breadth; slot-parsimony was self-inflicted. Take the whole
+  // top-48 (still ≥10× compression of the corpus) — evidALL rises to its pool ceiling (71%) by construction.
+  // ponytail: remaining coverage loss is a QUERY gap (evidence outside top-48) → R4 query expansion.
+  for (const h of hits0.slice(12)) if (!seen.has(h.id)) seen.set(h.id, h);
+  const hits = [...seen.values()].slice(0, 48);
   if (!hits.length) return { id: q.question_id, type: q.question_type, hypothesis: "I don't know.", ingested, trace: { hits: [], excerpts: "" } };
   // Rank-aware excerpts: the top hits carry the evidence — give them room (chunked memories fit whole);
   // the tail is context, a teaser is enough. Neighbour chunks (M2) render indented under their hit,
@@ -160,11 +181,13 @@ async function runOne(oracle: OracleAdapter, q: Q): Promise<{ id: string; type: 
   const shown = new Set(hits.map((h) => String(h.id)));
   const excerpts = hits
     .map((h, i) => {
-      let line = `- [said ${String(h.validAt ?? "").slice(0, 10) || "unknown date"}] ${h.content.slice(0, i < 4 ? 1400 : 400)}`;
+      // Truncation fix (leak-#2b): memory chunks are ≤600 chars (chunkTurn) — a 400 cut chopped the answer
+      // out of 11/470 questions the retrieval had already won. 700 shows any single chunk whole.
+      let line = `- [said ${String(h.validAt ?? "").slice(0, 10) || "unknown date"}] ${h.content.slice(0, i < 4 ? 1400 : 700)}`;
       for (const n of h.neighbors ?? []) {
         if (shown.has(n.id)) continue;
         shown.add(n.id);
-        line += `\n  ↳ [${n.position === "prev" ? "said just before" : "said right after"}] ${n.content.slice(0, 400)}`;
+        line += `\n  ↳ [${n.position === "prev" ? "said just before" : "said right after"}] ${n.content.slice(0, 700)}`;
       }
       return line;
     })
@@ -172,16 +195,42 @@ async function runOne(oracle: OracleAdapter, q: Q): Promise<{ id: string; type: 
   // M1 observability: record exactly what retrieval returned and what the answer stage saw — the
   // validation round had to rebuild 12 brains to learn this; the trace makes every run inspectable.
   const trace: Trace = { hits: hits.map((h, i) => ({ id: String(h.id), rank: i + 1, cut: i < 4 ? 1400 : 400, neighbors: (h.neighbors ?? []).map((n) => n.id) })), excerpts };
-  const hypothesis = await answerAsk(
+  // LME_DUMP: retrieval only — emit excerpts+gold+chunkHit to the trace, skip the answer LLM. Lets an
+  // external reader (here: Claude Code itself, when the SDK credit is out) do answer+judge off the dump.
+  const hypothesis = process.env.LME_DUMP ? "" : await answerAsk(
     `Today is ${q.question_date}. Below are excerpts from the user's past chat sessions, each marked with when it was said.\n\n` +
       `${excerpts}\n\nQuestion: ${q.question}\n\n` +
       `Answer concisely, grounded in the excerpts:\n` +
       `- A suggestion/recommendation question: recommend something that builds on the user's stated gear, plans, or preferences in the excerpts.\n` +
       `- A yes/no question where the excerpts cover the topic but never mention the asked detail: answer no.\n` +
       `- A date or duration question: compute carefully from the [said ...] dates.\n` +
+      `- A counting/how-many/total question: the mentions are usually SPREAD ACROSS many excerpts and dates — enumerate every matching mention first, then count/sum them.\n` +
       `- Only if the excerpts contain nothing relevant to the question, reply exactly: I don't know.`,
   );
-  return { id: q.question_id, type: q.question_type, hypothesis: hypothesis || "I don't know.", ingested, trace };
+  // Lever-1 vs Lever-2 attribution: did an evidence-turn chunk actually reach the reader's top-k? (ground
+  // truth via has_answer, immune to paraphrase). Cross-tabbed with the judge's verdict at the summary:
+  // chunk-in-hand & wrong ⇒ the reader lost with the answer present (Lever 2); miss & wrong ⇒ the chunk
+  // never surfaced (Lever 1). sessHit is the coarser session-level companion.
+  const chunkHit = goldDocs.size > 0 ? hits.some((h) => goldDocs.has(String(h.id))) : null;
+  const hitSess = new Set(hits.map((h) => docSession.get(String(h.id))).filter(Boolean));
+  const sessHit = goldSessions.size > 0 ? [...goldSessions].every((gs) => hitSess.has(gs)) : null;
+  // Leak-#2 mechanism split (measure BEFORE fixing the reader — "reader failed" hides three different leaks):
+  // evidAll: EVERY gold session has an evidence chunk in hand — `some` over-counts multi-evidence questions
+  //   (one anchor retrieved, the other missing = a COVERAGE loss, no reader prompt can fix it).
+  // goldStrFull vs goldStrShown: answer string in the retrieved chunks' FULL content but not in the rendered
+  //   excerpts = a TRUNCATION loss (rank 5+ hits are cut to 400 chars; chunks are ≤600).
+  const evidAll = goldDocs.size > 0 && goldSessions.size > 0
+    ? [...goldSessions].every((gs) => hits.some((h) => goldDocs.has(String(h.id)) && docSession.get(String(h.id)) === gs))
+    : null;
+  // Ceiling check: is the missing evidence even IN the deep candidate pool (top-48)? If not, no selection
+  // strategy can fix coverage — the query itself must change (multi-query / expansion, R4).
+  const evidAllDeep = goldDocs.size > 0 && goldSessions.size > 0
+    ? [...goldSessions].every((gs) => hits0.some((h) => goldDocs.has(String(h.id)) && docSession.get(String(h.id)) === gs))
+    : null;
+  const fullText = hits.map((h) => [h.content, ...(h.neighbors ?? []).map((n) => n.content)].join("\n")).join("\n");
+  const goldStrFull = goldPrecheck(q.answer, fullText);
+  const goldStrShown = goldPrecheck(q.answer, excerpts);
+  return { id: q.question_id, type: q.question_type, hypothesis: hypothesis || "I don't know.", ingested, trace, chunkHit, sessHit, evidAll, evidAllDeep, goldStrFull, goldStrShown };
 }
 
 // M1 "fix the ruler": deterministic pre-check kills the measured judge false-negatives (~4% —
@@ -251,8 +300,8 @@ async function main() {
     writeFileSync(OUT, "");
     const TRACE = OUT.replace(/\.jsonl$/, "") + ".trace.jsonl";
     writeFileSync(TRACE, "");
-    const results: { id: string; type: string; ok?: boolean }[] = [];
-    const probes: { id: string; type: string; probe?: Record<number, boolean>; probeSession?: Record<number, boolean> }[] = [];
+    const results: { id: string; type: string; ok?: boolean; chunkHit?: boolean | null; sessHit?: boolean | null }[] = [];
+    const probes: { id: string; type: string; probe?: Record<number, boolean>; probeSession?: Record<number, boolean>; probeDoc?: Record<number, boolean> }[] = [];
     let done = 0;
     const t0 = Date.now();
     let next = 0;
@@ -263,9 +312,9 @@ async function main() {
           const r = await runOne(oracle, q);
           const j = (!PROBE && JUDGE !== "none") ? await judgeOne(q, r.hypothesis) : undefined;
           appendFileSync(OUT, JSON.stringify({ question_id: r.id, hypothesis: r.hypothesis }) + "\n");
-          appendFileSync(TRACE, JSON.stringify({ question_id: r.id, type: r.type, question: q.question, gold: q.answer, ...r.trace, hypothesis: r.hypothesis, ok: j?.ok, judge_reason: j?.reason, ingested: r.ingested }) + "\n");
-          results.push({ id: r.id, type: r.type, ok: j?.ok });
-          if (PROBE) probes.push({ id: r.id, type: r.type, probe: r.probe, probeSession: r.probeSession });
+          appendFileSync(TRACE, JSON.stringify({ question_id: r.id, type: r.type, question: q.question, question_date: q.question_date, gold: q.answer, chunkHit: r.chunkHit, sessHit: r.sessHit, evidAll: r.evidAll, evidAllDeep: r.evidAllDeep, goldStrFull: r.goldStrFull, goldStrShown: r.goldStrShown, ...r.trace, hypothesis: r.hypothesis, ok: j?.ok, judge_reason: j?.reason, ingested: r.ingested }) + "\n");
+          results.push({ id: r.id, type: r.type, ok: j?.ok, chunkHit: r.chunkHit, sessHit: r.sessHit });
+          if (PROBE) probes.push({ id: r.id, type: r.type, probe: r.probe, probeSession: r.probeSession, probeDoc: r.probeDoc });
           done++;
           console.log(`  [${done}/${qs.length}] ${r.id} · ${r.type}${PROBE ? " · gold@k " + JSON.stringify(r.probe) : ` · ingested=${r.ingested}${j === undefined ? "" : j.ok ? " · ✅" : " · ❌"}`}`);
         }
@@ -283,7 +332,7 @@ async function main() {
       } catch { console.error("  ⚠ could not read /api/stats to verify semantic engagement"); }
     }
     if (PROBE) {
-      const report = (label: string, field: "probe" | "probeSession") => {
+      const report = (label: string, field: "probe" | "probeSession" | "probeDoc") => {
         const byType = new Map<string, Record<number, [number, number]>>();
         for (const p of probes) {
           const data = (p as any)[field] as Record<number, boolean> | undefined;
@@ -302,7 +351,30 @@ async function main() {
       };
       // GROUND TRUTH first (did retrieval hit the evidence session — immune to paraphrase), then the string proxy.
       report("gold-SESSION in top-k % — GROUND TRUTH (answer_session_ids)", "probeSession");
+      report("evidence-CHUNK in top-k % — GROUND TRUTH (has_answer) — the honest Lever-1 ruler", "probeDoc");
       report("gold-STRING in top-k % — proxy (undercounts paraphrase)", "probe");
+      // Decomposition (the 28-pt gap): AMONG questions where the evidence SESSION was retrieved, how often is
+      // the answer STRING also in top-k? Low ⇒ chunk-granularity (right session, wrong chunk, Lever 1);
+      // high-but-still-wrong ⇒ extraction (Lever 2, needs the correct-column to confirm). String-paraphrase
+      // still inflates the "missing" side, so read this as an upper bound on the chunk-granularity slice.
+      {
+        console.log(`\n━━━ answer-chunk surfaced GIVEN session hit (str∧sess / sess) · ${process.env.AURALIS_SEMANTIC === "1" ? "semantic" : "trigram"} ━━━`);
+        console.log(`  ${"type".padEnd(28)}${PROBE.map((k) => ("k=" + k).padStart(7)).join("")}`);
+        const byType = new Map<string, Record<number, [number, number]>>();
+        for (const p of probes) {
+          const sess = (p as any).probeSession as Record<number, boolean> | undefined;
+          const str = (p as any).probe as Record<number, boolean> | undefined;
+          if (p.id.includes("_abs") || !sess || !str) continue;
+          const m = byType.get(p.type) ?? {};
+          for (const K of PROBE) { const c = m[K] ?? [0, 0]; if (sess[K]) { c[1]++; if (str[K]) c[0]++; } m[K] = c; }
+          byType.set(p.type, m);
+        }
+        const tot: Record<number, [number, number]> = {};
+        for (const [t, m] of [...byType.entries()].sort()) {
+          console.log(`  ${t.padEnd(28)}${PROBE.map((k) => { const [g, n] = m[k] ?? [0, 0]; if (n) { tot[k] = tot[k] ?? [0, 0]; tot[k][0] += g; tot[k][1] += n; } return (n ? Math.round(g / n * 100) + "%" : "-").padStart(7); }).join("")}`);
+        }
+        console.log(`  ${"OVERALL".padEnd(28)}${PROBE.map((k) => { const [g, n] = tot[k] ?? [0, 0]; return (n ? Math.round(g / n * 100) + "%" : "-").padStart(7); }).join("")}`);
+      }
       console.log(`  wall ${(Date.now() - t0) / 1000 | 0}s`);
       return;
     }
@@ -321,6 +393,28 @@ async function main() {
       }
       console.log(`  ${"TOTAL".padEnd(28)} ${OK}/${N}  (${((OK / N) * 100).toFixed(0)}%)`);
       console.log(`  (judge=${JUDGE}${JUDGE === "openai" ? " " + JUDGE_MODEL : ""} → iteration numbers; official comparability needs evaluate_qa.py + GPT-4o)`);
+      // Lever attribution (the correct-column): among WRONG answers, was the evidence chunk in the reader's
+      // hand? chunk&✗ = reader lost with the answer present (Lever 2 / extraction); miss&✗ = chunk never
+      // surfaced (Lever 1 / retrieval). Ground truth (has_answer), so paraphrase does not distort it.
+      const conf = new Map<string, { cOk: number; cNo: number; mOk: number; mNo: number }>();
+      for (const r of results) {
+        if (r.chunkHit == null) continue;
+        const c = conf.get(r.type) ?? { cOk: 0, cNo: 0, mOk: 0, mNo: 0 };
+        if (r.chunkHit) { r.ok ? c.cOk++ : c.cNo++; } else { r.ok ? c.mOk++ : c.mNo++; }
+        conf.set(r.type, c);
+      }
+      if (conf.size) {
+        console.log(`\n  ━━━ Lever attribution — evidence-chunk in reader top-k × judged correct (ground truth) ━━━`);
+        console.log(`  ${"type".padEnd(28)}${"chunk&✓".padStart(9)}${"chunk&✗".padStart(9)}${"miss&✓".padStart(9)}${"miss&✗".padStart(9)}`);
+        const T = { cOk: 0, cNo: 0, mOk: 0, mNo: 0 };
+        for (const [t, c] of [...conf.entries()].sort()) {
+          console.log(`  ${t.padEnd(28)}${String(c.cOk).padStart(9)}${String(c.cNo).padStart(9)}${String(c.mOk).padStart(9)}${String(c.mNo).padStart(9)}`);
+          T.cOk += c.cOk; T.cNo += c.cNo; T.mOk += c.mOk; T.mNo += c.mNo;
+        }
+        console.log(`  ${"TOTAL".padEnd(28)}${String(T.cOk).padStart(9)}${String(T.cNo).padStart(9)}${String(T.mOk).padStart(9)}${String(T.mNo).padStart(9)}`);
+        const wrong = T.cNo + T.mNo;
+        if (wrong) console.log(`  → of ${wrong} wrong: ${T.cNo} had the chunk in hand (Lever 2 / reader, ${Math.round(T.cNo / wrong * 100)}%) · ${T.mNo} chunk missed (Lever 1 / retrieval, ${Math.round(T.mNo / wrong * 100)}%)`);
+      }
       // Failure-class report: questions tagged by a past failure analysis (bench/lme/failure-tags.json)
       // — each milestone must prove it moved ITS class and regressed nothing else.
       let tags: Record<string, string> = {};
