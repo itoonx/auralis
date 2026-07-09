@@ -145,8 +145,20 @@ memory quality. Competitively (all GPT-4o-answered): Zep 71.2 · **full-context 
 **Caveats (= next steps, not excuses):** (a) our GPT-4o judge ≠ official `evaluate_qa.py` and is likely
 STRICTER (the field's standard judge is lenient) — 58 is a floor; the official judge may lift us several
 points. (b) the answer prompt was implicitly Claude-tuned; GPT-4o follows the abstain/recommend/date rules
-differently. **True M5 (the official `evaluate_qa.py` number) is still open** — this all-OpenAI run is the
-honest interim, and it says: verify-in-reality deflated 79→58, exactly as feared.
+differently. **✅ True M5 — OFFICIAL number (2026-07-09):** ran the official `evaluate_qa.py` (gpt-4o-2024-08-06,
+per-type calibrated prompts) on the same 500 GPT-4o-answered hypotheses: **53.4%** (267/500).
+Per-ability: single-session-user 88.6 · knowledge-update 76.9 · temporal 46.6 · multi-session 39.9 ·
+assistant 35.7 · preference 33.3. Surprise: the official judge is **4.6 pts LOWER** than our own
+(58%) — it is STRICTER ("a subset of the answer = no") and has no gold-precheck, so our judge was the
+lenient one, not it. **Full decomposition 79.3 → 53.4 = −26 across three stacked confounds:**
+distribution −4 (pooled→full), **answer model −17 (Claude→GPT-4o, the biggest)**, judge −5 (ours→official).
+**Apples-to-apples (all GPT-4o-answered + official judge): Zep 71.2 · full-context GPT-4o 60–64 ·
+us 53.4 · Mem0 49.** Honest reading: on `S` our memory + GPT-4o does NOT beat dumping full context into
+GPT-4o (S fits in a context window — the field's contamination critique), and trails Zep by 18. Two live
+threads: (1) the −17 answer-model gap — is our answer prompt Claude-tuned (fixable) or is Claude simply the
+better reader (so auralis's real deployment number is higher but not Zep-comparable)? (2) auralis's actual
+edge — free LLM-less ingestion at scale — shows on `M` (1.5M tokens, doesn't fit a context window), not `S`.
+README upside-only rule holds: this number is NOT README-worthy; it lives here.
 
 ### M6 · Distribution round 2 — ghcr images + npm CLI
 **Why:** standing decision ("next production round we should have ghcr/npm"). Independent of
