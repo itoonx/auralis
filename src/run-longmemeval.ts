@@ -27,6 +27,10 @@ const EXPAND = process.env.LME_EXPAND !== "0"; // M2 adjacency (default ON = shi
 // this, session-capture writes each benchmark answer-prompt into the HUMAN's prod brain (found live: 89 LME
 // docs leaked). The spawned CLI inherits process.env, so setting it here stands the hook down for sub-queries.
 process.env.AURALIS_NO_CAPTURE = "1";
+// Retrieval-recall probe (LLM-free): LME_PROBE_K=12,25,50,100,200 → per question record whether the gold
+// string appears in the top-k retrieved content at each k. Splits "retrieval-miss" into ranking-miss
+// (gold shows up at higher k → fixable by k/ranking) vs recall-miss (never shows up → needs semantic).
+const PROBE = process.env.LME_PROBE_K ? process.env.LME_PROBE_K.split(",").map(Number) : null;
 
 interface Q {
   question_id: string;
@@ -81,7 +85,7 @@ const answerAsk = (prompt: string) => (process.env.LME_ANSWER === "openai" ? ask
 
 interface Trace { hits: { id: string; rank: number; cut: number; neighbors?: string[] }[]; excerpts: string }
 
-async function runOne(oracle: OracleAdapter, q: Q): Promise<{ id: string; type: string; hypothesis: string; ingested: number; trace: Trace }> {
+async function runOne(oracle: OracleAdapter, q: Q): Promise<{ id: string; type: string; hypothesis: string; ingested: number; trace: Trace; probe?: Record<number, boolean> }> {
   const project = `lme_${q.question_id}`;
   let ingested = 0;
   for (let i = 0; i < q.haystack_sessions.length; i++) {
@@ -111,6 +115,15 @@ async function runOne(oracle: OracleAdapter, q: Q): Promise<{ id: string; type: 
         ingested++;
       }
     }
+  }
+  // Retrieval-recall probe (LLM-free): main-query top-k at each k, does the gold string appear? Skips answer/judge.
+  if (PROBE) {
+    const goldAt: Record<number, boolean> = {};
+    for (const K of PROBE) {
+      const hh = await oracle.search(q.question, { project, limit: K });
+      goldAt[K] = goldPrecheck(q.answer, hh.map((h) => h.content).join("\n"));
+    }
+    return { id: q.question_id, type: q.question_type, hypothesis: "", ingested, trace: { hits: [], excerpts: "" }, probe: goldAt };
   }
   // Multi-query retrieval: a "days between A and B" question names TWO events — one query's top-k tends
   // to cover only the dominant one (sanity-gate finding). Union the main search with a per-entity search
@@ -223,6 +236,7 @@ async function main() {
     const TRACE = OUT.replace(/\.jsonl$/, "") + ".trace.jsonl";
     writeFileSync(TRACE, "");
     const results: { id: string; type: string; ok?: boolean }[] = [];
+    const probes: { id: string; type: string; probe?: Record<number, boolean> }[] = [];
     let done = 0;
     const t0 = Date.now();
     let next = 0;
@@ -231,16 +245,36 @@ async function main() {
         for (let i = next++; i < qs.length; i = next++) {
           const q = qs[i];
           const r = await runOne(oracle, q);
-          const j = JUDGE !== "none" ? await judgeOne(q, r.hypothesis) : undefined;
+          const j = (!PROBE && JUDGE !== "none") ? await judgeOne(q, r.hypothesis) : undefined;
           appendFileSync(OUT, JSON.stringify({ question_id: r.id, hypothesis: r.hypothesis }) + "\n");
           appendFileSync(TRACE, JSON.stringify({ question_id: r.id, type: r.type, question: q.question, gold: q.answer, ...r.trace, hypothesis: r.hypothesis, ok: j?.ok, judge_reason: j?.reason, ingested: r.ingested }) + "\n");
           results.push({ id: r.id, type: r.type, ok: j?.ok });
+          if (PROBE) probes.push({ id: r.id, type: r.type, probe: r.probe });
           done++;
-          console.log(`  [${done}/${qs.length}] ${r.id} · ${r.type} · ingested=${r.ingested}${j === undefined ? "" : j.ok ? " · ✅" : " · ❌"}`);
+          console.log(`  [${done}/${qs.length}] ${r.id} · ${r.type}${PROBE ? " · gold@k " + JSON.stringify(r.probe) : ` · ingested=${r.ingested}${j === undefined ? "" : j.ok ? " · ✅" : " · ❌"}`}`);
         }
       }),
     );
 
+    if (PROBE) {
+      // gold-in-top-k % per type (non-abstention). Rising with k = ranking-miss (fixable); flat/low = recall-miss (needs semantic).
+      const byType = new Map<string, Record<number, [number, number]>>();
+      for (const p of probes) {
+        if (p.id.includes("_abs") || !p.probe) continue;
+        const m = byType.get(p.type) ?? {};
+        for (const K of PROBE) { const c = m[K] ?? [0, 0]; if (p.probe[K]) c[0]++; c[1]++; m[K] = c; }
+        byType.set(p.type, m);
+      }
+      const tot: Record<number, [number, number]> = {};
+      console.log(`\n━━━ retrieval-recall probe · gold-in-top-k % (non-abstention, ${process.env.AURALIS_SEMANTIC === "1" ? "semantic" : "trigram"}) ━━━`);
+      console.log(`  ${"type".padEnd(28)}${PROBE.map((k) => ("k=" + k).padStart(7)).join("")}`);
+      for (const [t, m] of [...byType.entries()].sort()) {
+        console.log(`  ${t.padEnd(28)}${PROBE.map((k) => { const [g, n] = m[k] ?? [0, 0]; if (n) { tot[k] = tot[k] ?? [0, 0]; tot[k][0] += g; tot[k][1] += n; } return (n ? Math.round(g / n * 100) + "%" : "-").padStart(7); }).join("")}`);
+      }
+      console.log(`  ${"OVERALL".padEnd(28)}${PROBE.map((k) => { const [g, n] = tot[k] ?? [0, 0]; return (n ? Math.round(g / n * 100) + "%" : "-").padStart(7); }).join("")}`);
+      console.log(`  wall ${(Date.now() - t0) / 1000 | 0}s`);
+      return;
+    }
     console.log(`\n━━━ LongMemEval (${process.env.AURALIS_SEMANTIC === "1" ? "semantic" : "trigram"} · judge=${JUDGE} · INTERNAL numbers) ━━━`);
     if (JUDGE !== "none") {
       const byType = new Map<string, { n: number; ok: number }>();
