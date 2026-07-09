@@ -99,8 +99,17 @@ flips vs v2 are reader sampling noise (evidence verified present both rounds). R
 2 pure-paraphrase (doctors↔Dr., dinner↔basil/mint — the ONLY true R4/semantic residual), 2 common-term
 dilution on counting questions (R3 exhaustive), 1-2 temporal gold quirks.
 
-**Bug still owed:** single-row `vectorAdd` (`server.ts:349`, runs even on trigram) bloats LanceDB per-`learn`
-until `learn` times out ~q13; workaround `ORACLE_NO_VECTORS=1` (500-Q probe completes in ~200s). Real fix = batch+serialize.
+**LanceDB bug: ✅ FIXED + VERIFIED (embed queue, R2a).** Reproduced all three failure modes (builtin embed
+to isolate the LanceDB write from embed latency): (A) 800 single-row adds → 800 fragments / 34M — one
+fragment PER learn; (B) 8-wide concurrent ingest silently dropped 7/800 vectors (per-doc catch hid it);
+(C) semantic + concurrent → learn awaited the slow sidecar → 30s timeout (the original ~q13 crash). Fix =
+a serialized batch worker: learn `enqueueVector` and returns; one worker batches `embed()` then does ONE
+multi-row `vtable.add(rows)` per flush; `/api/embed-settle` drains for read-after-write; counters in
+`/api/stats` (embed_queue_ok/failed/depth). Re-measured, SAME conditions: (A) 800 docs → 73 fragments / 1.8M
+(11×/19×); (B) 0/800 dropped; (C) **semantic + 8-wide concurrent, 304 docs → 0 timeouts, learn 117ms, 100%
+real semantic, 0 failed** — the first time semantic completes a concurrent burst in the project's history.
+Regression test `test/embed-queue.test.ts`; harness settles on the semantic path. `ORACLE_NO_VECTORS=1`
+remains the fast probe path (vectors not needed for FTS-recall probes).
 
 ---
 ### (superseded — original problem statement, kept for the record)

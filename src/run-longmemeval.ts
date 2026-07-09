@@ -133,6 +133,13 @@ async function runOne(oracle: OracleAdapter, q: Q): Promise<{ id: string; type: 
       }
     }
   }
+  // Read-after-write for vectors (R2a): learn now enqueues embeddings on a background worker, so a semantic
+  // run must drain the queue before searching or it queries a half-written vector table. FTS is synchronous
+  // (no settle needed); skip entirely when vectors are off. Assert the worker didn't silently drop a batch.
+  if (process.env.AURALIS_SEMANTIC === "1") {
+    const s = await oracle.settleVectors();
+    if (s.failed > 0) console.error(`  ⚠ embed queue dropped ${s.failed} vectors for ${q.question_id} — semantic recall is degraded`);
+  }
   // Retrieval-recall probe (LLM-free): main-query top-k at each k, does the gold string appear? Skips answer/judge.
   if (PROBE) {
     const goldAt: Record<number, boolean> = {};       // gold STRING in top-k content (proxy)

@@ -4,8 +4,9 @@
 > string-proxy diagnosis. L1 (answer-path eviction), L2 (coverage/truncation/counting), and L3 (FTS
 > 8-token-cap + porter root cause) are DONE on branch `fix-recall` (55→79/90 same-instrument). See
 > `prd-fix-recall.md` SESSION-2 UPDATE. **NEXT QUEUE (in order):**
-> 1. **LanceDB batch-add fix** — single-row `vectorAdd` bloat/crash (confirmed live); batch + serialize +
->    `ORACLE_RESET` drops the lancedb dir. Prereq for ANY semantic run.
+> 1. ~~**LanceDB batch-add fix**~~ ✅ **DONE** — embed queue (serialized batch worker + `/api/embed-settle` +
+>    counters). Reproduced A/B/C, re-measured: 800→73 fragments, 0 concurrent drops, semantic burst completes
+>    (117ms, 100% real, 0 timeout). Test `test/embed-queue.test.ts`. See PRD "LanceDB bug: FIXED".
 > 2. **C1/C2 secret cleanup + ingress scrub** — purge leaked key docs; redact sk-*/ghp_* in
 >    `hooks/session-capture.mjs` before learn.
 > 3. **R3-lite exhaustive retrieval** — 2 counting-dilution losses (bike-$, projects) need every-match-above-floor.

@@ -226,6 +226,16 @@ export class OracleAdapter implements MemoryAdapter {
     if (!res.ok) throw new Error(`oracle reset ${res.status} (is ORACLE_ALLOW_RESET set on the sidecar?)`);
   }
 
+  // Read-after-write for the vector lane (R2a embed queue): learn enqueues embeddings on a background
+  // worker, so a caller about to search vectors must drain the queue first. Returns {embedded, failed} so
+  // the caller can SCREAM if the worker dropped a batch. No-op / fast when vectors are off. Long timeout:
+  // a burst ingest can leave thousands of embeds queued.
+  async settleVectors(): Promise<{ embedded: number; failed: number }> {
+    const res = await fetch(new URL("/api/embed-settle", this.baseUrl), { method: "POST", headers: AUTH, signal: AbortSignal.timeout(300_000) });
+    if (!res.ok) throw new Error(`oracle embed-settle ${res.status}`);
+    return (await res.json()) as { embedded: number; failed: number };
+  }
+
   // Concurrent-dedup claim, resolved server-side so it is shared across processes and agent runtimes.
   async claim(scope: string, target: string, by: string): Promise<ClaimResult> {
     const res = await log.time("oracle.claim", scope, () =>

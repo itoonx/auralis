@@ -365,13 +365,44 @@ async function initVectors() {
     console.error("vectors: OFF, FTS-only fallback —", String(e).slice(0, 120));
   }
 }
-async function vectorAdd(id: string, content: string) {
+// Embed QUEUE (R2a) — replaces the single-row synchronous vectorAdd. Three failure modes were REPRODUCED
+// (verify-reality, builtin embed to isolate the LanceDB write): (A) write amplification — one LanceDB
+// fragment PER learn (800 docs → 800 fragments / 34M); at 100k docs that is GBs of fragments and commits
+// that slow toward a stall. (B) concurrent add races — 8-wide ingest silently dropped 7/800 vectors
+// (per-doc catch hid it). (C) under semantic, learn awaited a slow sidecar embed → 30s timeout, the crash
+// masked as "learn timeout". One serialized worker that BATCHES the add fixes all three: 1 fragment per
+// flush (A), a single writer (B), learn enqueues and returns (C).
+type QItem = { id: string; content: string };
+const embedQ: QItem[] = [];
+let qDraining = false;
+let qEmbedOk = 0, qEmbedFail = 0;
+const EMBED_BATCH = Number(process.env.ORACLE_EMBED_BATCH ?? 128);
+
+function enqueueVector(id: string, content: string) {
   if (!vectorsOn) return;
+  embedQ.push({ id, content });
+  if (!qDraining) void drainEmbedQueue();
+}
+async function drainEmbedQueue(): Promise<void> {
+  if (qDraining) return;
+  qDraining = true;
   try {
-    const row = { id, vector: await embed(content), content: content.slice(0, 2000) };
-    if (!vtable) vtable = await vdb.createTable("docs", [row]);
-    else await vtable.add([row]);
-  } catch (e) { console.error("vector add failed (skipping this doc; vectors stay on):", String(e).slice(0, 100)); } // per-doc skip — one hiccup must NOT disable vectors for the whole run (R0)
+    while (embedQ.length) {
+      const batch = embedQ.splice(0, EMBED_BATCH);
+      try {
+        const rows = [];
+        for (const it of batch) rows.push({ id: it.id, vector: await embed(it.content), content: it.content.slice(0, 2000) });
+        if (!vtable) vtable = await vdb.createTable("docs", rows);
+        else await vtable.add(rows); // ONE multi-row add per flush → 1 fragment per batch, single writer (no race)
+        qEmbedOk += rows.length;
+      } catch (e) { qEmbedFail += batch.length; console.error("embed batch add failed (batch skipped, vectors stay on):", String(e).slice(0, 100)); }
+    }
+  } finally { qDraining = false; }
+}
+// Read-after-write for the vector lane: a caller that will search vectors must settle the queue first,
+// else it searches a table the worker hasn't written yet. FTS is already synchronous; this is vectors-only.
+async function settleEmbedQueue(): Promise<void> {
+  while (embedQ.length || qDraining) await new Promise((r) => setTimeout(r, 20));
 }
 async function vectorQuery(text: string, k: number): Promise<Map<string, number>> {
   const out = new Map<string, number>();
@@ -386,6 +417,8 @@ async function vectorQuery(text: string, k: number): Promise<Map<string, number>
   return out;
 }
 async function vectorReset() {
+  await settleEmbedQueue(); // drain in-flight writes before dropping, else the worker resurrects the table
+  embedQ.length = 0; qEmbedOk = 0; qEmbedFail = 0;
   if (!vectorsOn || !vdb) return;
   try { await vdb.dropTable("docs"); vtable = null; } catch { /* ignore */ }
 }
@@ -432,7 +465,15 @@ const server = Bun.serve({
       const u = (project
         ? db.query("SELECT COALESCE(SUM(times_used),0) AS u, COALESCE(SUM(retrieved_count),0) AS s FROM docs WHERE project = ? AND superseded_by IS NULL").get(project)
         : db.query("SELECT COALESCE(SUM(times_used),0) AS u, COALESCE(SUM(retrieved_count),0) AS s FROM docs WHERE superseded_by IS NULL").get()) as { u: number; s: number };
-      return Response.json({ count: row.c, edges: e.c, nodes: n.c, cited: u.u, seen: u.s, vectors: vectorsOn, embedder, semantic_embeds: semEmbedOk, embed_fallbacks: semEmbedFallback });
+      return Response.json({ count: row.c, edges: e.c, nodes: n.c, cited: u.u, seen: u.s, vectors: vectorsOn, embedder, semantic_embeds: semEmbedOk, embed_fallbacks: semEmbedFallback, embed_queue_depth: embedQ.length, embed_queue_ok: qEmbedOk, embed_queue_failed: qEmbedFail });
+    }
+
+    // Read-after-write for the vector lane (R2a): a caller ingesting a burst then searching vectors POSTs
+    // this to block until the embed queue has drained. Returns the counts so the caller can SCREAM if the
+    // worker dropped a batch (fail-quiet-but-counted). No-op when vectors are off.
+    if (req.method === "POST" && url.pathname === "/api/embed-settle") {
+      await settleEmbedQueue();
+      return Response.json({ ok: true, embedded: qEmbedOk, failed: qEmbedFail, vectors: vectorsOn });
     }
 
     if (req.method === "POST" && url.pathname === "/api/learn") {
@@ -449,7 +490,7 @@ const server = Bun.serve({
       const validAt = typeof body?.validAt === "string" && !Number.isNaN(Date.parse(body.validAt)) ? new Date(body.validAt).toISOString() : null;
       insDoc.run(id, pattern, concepts, body?.project ?? null, source, new Date().toISOString(), body?.tier === "distilled" ? "distilled" : "raw", trustOf(source), pinned ? 1 : 0, validAt);
       insFts.run(id, pattern, concepts); // synchronous -> immediately searchable
-      await vectorAdd(id, pattern);
+      enqueueVector(id, pattern); // vectors go through the serialized batch worker — never blocks learn (R2a)
       // NOTE (R0/R2a): under semantic + concurrent ingest this blocks the learn on a slow sidecar embed and
       // can time out; fire-and-forget instead crashes on concurrent LanceDB writes. The real fix is an embed
       // QUEUE (batched sidecar calls + serialized vector writes) — tracked as R2a. Observability below now
