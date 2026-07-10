@@ -1,4 +1,5 @@
 ---
+import Logo from './Logo.astro'
 import { runData, shortRunId, recordedDate } from '../lib/run'
 
 const gh = 'https://github.com/itoonx/Auralis'
@@ -16,7 +17,8 @@ const project: Array<[string, string]> = [
   <div class="mx-auto max-w-6xl px-6 pb-10 pt-16 md:pt-20">
     <div class="grid gap-12 md:grid-cols-[minmax(0,1fr)_auto_auto] md:gap-16 lg:gap-24">
       <div>
-        <a href="#top" class="font-sans text-lg font-medium lowercase text-lp-fg">auralis</a>
+        <a href="#top" class="flex w-fit items-center gap-2.5 font-sans text-lg font-medium lowercase text-lp-fg">
+          <Logo class="h-6 w-6" />auralis</a>
         <p class="mt-3 max-w-sm text-pretty text-sm text-lp-muted">
           one shared, persistent brain for fleets of ai coding agents — measured on live runs, not
           asserted.

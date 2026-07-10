@@ -1,4 +1,6 @@
 ---
+import Logo from './Logo.astro'
+
 // hideNarrow: the full set needs ~417px — wider than a 390px phone. proof,
 // start, and github survive the cut; architecture/docs return at sm:.
 const links: Array<[string, string, boolean?]> = [
@@ -15,8 +17,9 @@ const links: Array<[string, string, boolean?]> = [
 <!-- glass nav: bg/90 made the blur invisible — a lower veil + stronger blur
      lets the particle field read through while text stays legible -->
 <nav class="fixed inset-x-0 top-0 z-10 border-b border-lp-border bg-lp-bg/55 backdrop-blur-xl backdrop-saturate-150" aria-label="primary">
-  <div class="mx-auto flex max-w-6xl items-baseline justify-between px-6 py-3">
-    <a href="#top" class="font-sans text-sm font-medium lowercase text-lp-fg">auralis</a>
+  <div class="mx-auto flex max-w-6xl items-center justify-between px-6 py-3">
+    <a href="#top" class="flex items-center gap-2 font-sans text-sm font-medium lowercase text-lp-fg">
+      <Logo class="h-[18px] w-[18px]" />auralis</a>
     <div class="flex gap-3 font-mono text-xs text-lp-muted sm:gap-5">
       {links.map(([label, href, hideNarrow]) => (
         <a
