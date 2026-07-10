@@ -6,8 +6,11 @@ const clone = 'git clone https://github.com/itoonx/Auralis'
      ScrollSmoother content wrapper — a transformed ancestor would break its
      position:fixed. the hero-* classes are animation hooks for Motion.astro:
      the H1 stays transform-only (it's the LCP element and must paint). -->
-<header id="hero" class="relative">
-  <div class="relative mx-auto max-w-6xl px-6 pb-24 pt-20 md:pb-32 md:pt-28">
+<!-- full-viewport hero: svh (not vh) so mobile browser chrome doesn't cause
+     an overflow jump; content vertically centered, py guards tiny landscape
+     screens from clipping. -->
+<header id="hero" class="relative flex min-h-svh items-center">
+  <div class="relative mx-auto w-full max-w-6xl px-6 py-24">
     <p class="hero-kicker flex items-center gap-3 font-mono text-xs tracking-widest text-lp-muted">
       <span class="h-px w-10 bg-lp-accent"></span>
       auralis · the coordination layer for agent fleets
