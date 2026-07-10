@@ -89,12 +89,52 @@ const judgeAsk = (prompt: string) => (JUDGE === "openai" ? askOpenAI(prompt) : a
 // GPT-4o-answered) that also sidesteps the Claude window entirely (the whole P4 run stays on OpenAI).
 const ANSWER_MODEL = process.env.LME_ANSWER_MODEL ?? "gpt-4o";
 const answerAsk = (prompt: string) => (process.env.LME_ANSWER === "openai" ? askOpenAI(prompt, ANSWER_MODEL) : ask(prompt));
+// R1 controlled baseline: memory (retrieval) | fullcontext (all turns, no retrieval) | grep (lexical top-k,
+// no memory layer). The reader prompt below is the SHARED instrument — only the `excerpts` block differs, so
+// any score delta is attributable to retrieval, not the prompt (rule 11: deltas count only on one ruler).
+const MODE = process.env.LME_MODE ?? "memory";
+async function composeAnswer(q: Q, excerpts: string): Promise<string> {
+  if (process.env.LME_DUMP) return "";
+  return answerAsk(
+    `Today is ${q.question_date}. Below are excerpts from the user's past chat sessions, each marked with when it was said.\n\n` +
+      `${excerpts}\n\nQuestion: ${q.question}\n\n` +
+      `Answer concisely, grounded in the excerpts:\n` +
+      `- A suggestion/recommendation question: recommend something that builds on the user's stated gear, plans, or preferences in the excerpts.\n` +
+      `- A yes/no question where the excerpts cover the topic but never mention the asked detail: answer no.\n` +
+      `- A date or duration question: compute carefully from the [said ...] dates.\n` +
+      `- A counting/how-many/total question: the mentions are usually SPREAD ACROSS many excerpts and dates — enumerate every matching mention first, then count/sum them.\n` +
+      `- Only if the excerpts contain nothing relevant to the question, reply exactly: I don't know.`,
+  );
+}
 
 interface Trace { hits: { id: string; rank: number; cut: number; neighbors?: string[] }[]; excerpts: string }
 
 async function runOne(oracle: OracleAdapter, q: Q): Promise<{ id: string; type: string; hypothesis: string; ingested: number; trace: Trace; probe?: Record<number, boolean>; probeSession?: Record<number, boolean>; probeDoc?: Record<number, boolean>; chunkHit?: boolean | null; sessHit?: boolean | null; evidAll?: boolean | null; evidAllDeep?: boolean | null; goldStrFull?: boolean; goldStrShown?: boolean }> {
   const project = `lme_${q.question_id}`;
   let ingested = 0;
+  // R1 baselines bypass the memory layer entirely — same reader+judge, different excerpt source.
+  //   fullcontext: EVERY haystack turn in chronological order (subset90 haystacks are ~120k tok → all fit a
+  //     200k reader with no truncation, cleaner than the published GPT-4o 128k number that truncates 80/90).
+  //   grep: lexical top-96 turns by question-word overlap — no chunking/edges/RRF (isolates the LAYER's value).
+  if (MODE === "fullcontext" || MODE === "grep") {
+    const qwords = new Set(q.question.toLowerCase().match(/[a-z0-9]+/g) ?? []);
+    const turns: { date: string; role: string; text: string; score: number }[] = [];
+    for (let i = 0; i < q.haystack_sessions.length; i++) {
+      const date = (toIso(q.haystack_dates?.[i] ?? "") ?? "").slice(0, 10) || "unknown date";
+      for (const turn of q.haystack_sessions[i]) {
+        const text = String(turn.content ?? "").trim();
+        if (text.length < 20) continue;
+        let score = 0;
+        if (MODE === "grep") for (const w of text.toLowerCase().match(/[a-z0-9]+/g) ?? []) if (qwords.has(w)) score++;
+        turns.push({ date, role: turn.role, text, score });
+      }
+    }
+    const picked = MODE === "grep" ? turns.filter((t) => t.score > 0).sort((a, b) => b.score - a.score).slice(0, 96) : turns;
+    const excerpts = picked.map((t) => `- [said ${t.date}] ${t.role}: ${t.text}`).join("\n");
+    const hypothesis = await composeAnswer(q, excerpts);
+    const goldStr = goldPrecheck(q.answer, excerpts);
+    return { id: q.question_id, type: q.question_type, hypothesis: hypothesis || "I don't know.", ingested: picked.length, trace: { hits: [], excerpts }, goldStrFull: goldStr, goldStrShown: goldStr };
+  }
   // GROUND TRUTH (P0, verify-in-reality): the sessions that actually hold the evidence + a doc→session map,
   // so the probe can ask "did retrieval return a doc from the gold session?" — immune to paraphrase, unlike
   // the gold-STRING proxy which reads 0% on preference simply because the answer is worded differently.
@@ -226,16 +266,7 @@ async function runOne(oracle: OracleAdapter, q: Q): Promise<{ id: string; type: 
   const trace: Trace = { hits: hits.map((h, i) => ({ id: String(h.id), rank: i + 1, cut: i < 4 ? 1400 : 400, neighbors: (h.neighbors ?? []).map((n) => n.id) })), excerpts };
   // LME_DUMP: retrieval only — emit excerpts+gold+chunkHit to the trace, skip the answer LLM. Lets an
   // external reader (here: Claude Code itself, when the SDK credit is out) do answer+judge off the dump.
-  const hypothesis = process.env.LME_DUMP ? "" : await answerAsk(
-    `Today is ${q.question_date}. Below are excerpts from the user's past chat sessions, each marked with when it was said.\n\n` +
-      `${excerpts}\n\nQuestion: ${q.question}\n\n` +
-      `Answer concisely, grounded in the excerpts:\n` +
-      `- A suggestion/recommendation question: recommend something that builds on the user's stated gear, plans, or preferences in the excerpts.\n` +
-      `- A yes/no question where the excerpts cover the topic but never mention the asked detail: answer no.\n` +
-      `- A date or duration question: compute carefully from the [said ...] dates.\n` +
-      `- A counting/how-many/total question: the mentions are usually SPREAD ACROSS many excerpts and dates — enumerate every matching mention first, then count/sum them.\n` +
-      `- Only if the excerpts contain nothing relevant to the question, reply exactly: I don't know.`,
-  );
+  const hypothesis = await composeAnswer(q, excerpts);
   // Lever-1 vs Lever-2 attribution: did an evidence-turn chunk actually reach the reader's top-k? (ground
   // truth via has_answer, immune to paraphrase). Cross-tabbed with the judge's verdict at the summary:
   // chunk-in-hand & wrong ⇒ the reader lost with the answer present (Lever 2); miss & wrong ⇒ the chunk

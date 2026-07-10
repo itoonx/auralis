@@ -81,16 +81,42 @@ Legend: 🔒 = owns a hot file (conflict risk) · ⚡ = isolated files (safe to 
 
 *Wave 1 is ~one worker's sequential job (R0-1→R0-2 share server.ts + harness). R0-3 can run alongside.*
 
-## WAVE 2 — R1 controlled baseline (SERIAL after R0; the honest metric) 🔒run-longmemeval.ts
+## WAVE 2 — R1 controlled baseline (the thesis test: does the memory layer beat full-context?) 🔒run-longmemeval.ts
 
-- **R1-1 · full-context mode** — `LME_MODE=fullcontext`: feed all haystack turns to the reader, no retrieval.
-  Files: `src/run-longmemeval.ts`. Accept: reproduces ~60–64 (GPT-4o) — matches the published full-context.
-- **R1-2 · grep mode** — `LME_MODE=grep`: lexical top-k over raw turns, no memory layer.
-  Files: `src/run-longmemeval.ts`. Accept: emits a grep baseline number.
-- **R1-3 · three-way delta report** — one command prints memory vs full-context vs grep (same reader+judge).
-  Files: `src/run-controlled.ts` (new) or a report block. ▶R1-1,R1-2. Accept: reproduces memory 53 < full-context 60–64.
+> **2026-07-10 — DISPATCH-READY, feasibility measured.** R1 is the one number that validates the whole
+> project: literature says memory-augmented **loses** to full-context (our own official = 53.4%); until R1 we
+> don't know if our memory beats naive dump-everything. **NOT blocked on credit** — the reader is the same
+> Claude Code CLI subagent that already scored subset90 85/90; only the *official gpt-4o judge* needs OpenAI,
+> and the internal 3-way delta doesn't use it (rule 11: same reader+judge across all three arms is what
+> matters, not which judge). **Feasibility (measured on subset90):** haystacks are ~118–128k tok; **all 90
+> fit a Claude 200k reader (<180k) with NO truncation** — so our full-context is *cleaner* than the published
+> GPT-4o number (128k fits only 10/90 → they truncate 80). **The one real cost:** the full-context arm feeds
+> ~122k tok × 90 ≈ **11M input tok** on the CLI reader (memory/grep arms ~20k/q, 5–6× cheaper) → **pilot
+> first, don't run 90×3 blind.**
 
-*R1-1/2/3 all touch the harness → serialize (one worker) or split modes into a `src/lme-modes.ts` module first.*
+Three arms, ONE instrument (same reader prompt template + same 6-type judge + same goldPrecheck), same
+subset90 so it's directly comparable to memory's 85/90:
+
+- **R1-0 · Feasibility** ✅ **DONE (2026-07-10)** — token-size probe: all 90 fit 200k, no truncation needed.
+- **R1-1 · full-context mode** ✅ **BUILT (2026-07-10)** — `LME_MODE=fullcontext`: skip the oracle entirely;
+  render EVERY haystack turn in chronological order with the same `[said DATE]` tags the memory arm uses, into
+  the same reader prompt. Files: `src/run-longmemeval.ts` (early branch in runOne + shared `composeAnswer`).
+- **R1-2 · grep mode** ✅ **BUILT (2026-07-10)** — `LME_MODE=grep`: lexical top-96 turns by question-word
+  overlap over RAW turns — no chunking/edges/RRF/entity/expansion (isolates "does the memory LAYER beat dumb
+  keyword match?"). Same reader. Files: `src/run-longmemeval.ts`.
+- **R1-3 · three-way delta report** — memory vs full-context vs grep, per-type table, same reader+judge.
+  **PILOT DONE (6 Qs, 1/type, self-judged): memory 5/6 · full-context 4/6 · grep 3/6.** Direction =
+  memory ≥ full-context ≥ grep (POSITIVE for the thesis, against the literature's "memory < full-context").
+  Key discriminator `0a995998` (multi-session counting): memory answered "3" (correct), full-context "2"
+  (WRONG — lost-in-the-middle across 122k tok), grep couldn't total → memory's compression makes multi-session
+  evidence salient where dump-everything drowns it. **CAVEAT: n=6, noise ±17%/question — directional only, not
+  conclusive; 1 temporal Q tied (all wrong 6 vs gold 7).** Next: full 90×3 (~13M tok) or 30-Q mid-pilot to
+  confirm. Reproduce: DUMP each arm → reader subagents (same prompt) → judge.
+
+**Execution order (cost-guarded):** R1-1 + R1-2 build (cheap, ~1 worker, share the harness → serialize) →
+**PILOT: 6 Qs (1/type) or the 15 multi-session across all 3 arms** → read the DIRECTION → only then decide
+whether the full 90×3 (esp. the 11M-tok full-context arm) is worth tightening the number. *R1-1/2/3 all touch
+the harness → serialize, or split modes into `src/lme-modes.ts` first.*
 
 ## WAVE 3 — recall fixes (PARALLEL after R0+R1, if split across files; worktree the server.ts overlaps)
 
