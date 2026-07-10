@@ -12,7 +12,9 @@ const links: Array<[string, string, boolean?]> = [
 
 <!-- fixed, not sticky: the nav sits outside the ScrollSmoother wrapper, and
      sticky positioning can't track a transform-scrolled content block -->
-<nav class="fixed inset-x-0 top-0 z-10 border-b border-lp-border bg-lp-bg/90 backdrop-blur" aria-label="primary">
+<!-- glass nav: bg/90 made the blur invisible — a lower veil + stronger blur
+     lets the particle field read through while text stays legible -->
+<nav class="fixed inset-x-0 top-0 z-10 border-b border-lp-border bg-lp-bg/55 backdrop-blur-xl backdrop-saturate-150" aria-label="primary">
   <div class="mx-auto flex max-w-6xl items-baseline justify-between px-6 py-3">
     <a href="#top" class="font-sans text-sm font-medium lowercase text-lp-fg">auralis</a>
     <div class="flex gap-3 font-mono text-xs text-lp-muted sm:gap-5">

@@ -25,15 +25,15 @@ const bodyColor: Record<string, string> = {
 }
 ---
 
-<!-- no Section wrapper: the terminal window overflows up into the hero —
-     it's the first proof you see, poking above the fold — so this section
-     carries no title, no top border and no top padding of its own. -->
+<!-- no Section wrapper: the terminal reads as part of the hero composition —
+     this section carries no title, no top border and no top padding; the
+     hero's own bottom padding sets a constant gap to the terminal. -->
 <section id="replay" class="relative">
   <div class="mx-auto max-w-6xl px-6 pb-20 md:pb-28">
   <!-- The Replay — a real recorded fleet run in a terminal window. SSR renders
        the completed transcript (the no-JS / reduced-motion / crawler version);
        the script below replays it against the log's virtual clock. -->
-  <figure class="-mt-14 text-left md:-mt-44">
+  <figure class="text-left">
     <div class="overflow-hidden rounded-xl border border-lp-border bg-lp-bg shadow-[0_24px_80px_-32px_rgb(0_0_0/0.9)]">
       <!-- title bar — window chrome; the traffic lights are decoration -->
       <div class="relative flex items-center gap-4 border-b border-lp-border bg-lp-surface-2/80 px-4 py-2.5">

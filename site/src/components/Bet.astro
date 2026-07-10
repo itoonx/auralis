@@ -7,38 +7,56 @@ import Section from './Section.astro'
     when you run many agents on one codebase, the model isn't the bottleneck — the shared state is.
   </h2>
 
-  <!-- to-scale wall-clock bar: worker.run fills 99.9%; the platform sliver is
-       nearly invisible on purpose. the magnifier zooms the sliver — wow from
-       honest proportions, not styling. -->
-  <figure class="mt-12">
-    <!-- no role="img" here: it would flatten the subtree for assistive tech
-         and swallow the interactive zoom button inside. the bar's visible
-         text + the figcaption already state every number. -->
-    <div id="wallclock-bar" class="relative h-10 overflow-hidden rounded border border-lp-border bg-lp-surface-2">
-      <div class="flex h-full items-center px-4 font-mono text-xs text-lp-muted">worker.run · 99.9% of wall-clock</div>
-      <div class="absolute inset-y-0 right-0 w-[2px] bg-lp-accent" aria-hidden="true"></div>
-      <button
-        id="sliver-btn"
-        type="button"
-        class="absolute inset-y-0 right-0 hidden w-11 cursor-zoom-in"
-        aria-expanded="false"
-        aria-controls="sliver-zoom"
-        aria-label="zoom the platform sliver"></button>
+  <!-- to-scale wall-clock instrument: worker.run fills 99.9%; the platform
+       sliver is nearly invisible on purpose. the magnifier zooms the sliver
+       with drafting-style leader lines — wow from honest proportions, not
+       styling. -->
+  <figure class="mt-12 overflow-hidden rounded-2xl border border-lp-border bg-lp-surface">
+    <div class="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-lp-border bg-lp-surface-2/80 px-4 py-2.5 font-mono text-xs text-lp-muted">
+      <span>where a fleet run's wall-clock goes · drawn to actual scale</span>
+      <span class="ml-auto shrink-0 text-lp-fg">measured, not asserted</span>
     </div>
 
-    <div id="sliver-zoom" hidden class="mt-2 overflow-hidden rounded border border-lp-border bg-lp-surface">
-      <div class="border-b border-lp-border px-4 py-1.5 font-mono text-[11px] text-lp-muted">
-        the sliver, magnified ~2000× — this is the whole platform
+    <div class="p-5">
+      <!-- no role="img" here: it would flatten the subtree for assistive tech
+           and swallow the interactive zoom button inside. the bar's visible
+           text + the figcaption already state every number. -->
+      <div id="wallclock-bar" class="relative h-12 overflow-hidden rounded border border-lp-border bg-lp-surface-2">
+        <div class="flex h-full items-center px-4 font-mono text-xs text-lp-muted">
+          worker.run — the LLM call · 99.9% of wall-clock
+        </div>
+        <div class="bet-sliver absolute inset-y-0 right-0 w-[2px] bg-lp-accent" aria-hidden="true"></div>
+        <button
+          id="sliver-btn"
+          type="button"
+          class="absolute inset-y-0 right-0 hidden w-11 cursor-zoom-in"
+          aria-expanded="false"
+          aria-controls="sliver-zoom"
+          aria-label="zoom the platform sliver"></button>
       </div>
-      <div class="flex h-10 items-center justify-between px-4 font-mono text-xs">
-        <span class="text-lp-accent">oracle.claim · 2.4ms mean</span>
-        <span class="text-lp-muted">the platform adds ~0.05% of wall-clock</span>
+
+      <div id="sliver-zoom" hidden>
+        <!-- drafting callout: dashed leader lines fan the 2px sliver out to
+             the full width of the magnified strip -->
+        <svg class="block h-6 w-full text-lp-accent/60" viewBox="0 0 100 10" preserveAspectRatio="none" aria-hidden="true">
+          <path d="M99.6 0 L 0.2 10" stroke="currentColor" stroke-width="1" stroke-dasharray="4 4" vector-effect="non-scaling-stroke" fill="none" />
+          <path d="M99.9 0 L 99.8 10" stroke="currentColor" stroke-width="1" stroke-dasharray="4 4" vector-effect="non-scaling-stroke" fill="none" />
+        </svg>
+        <div class="overflow-hidden rounded border border-lp-accent/30 bg-lp-bg">
+          <div class="border-b border-lp-border px-4 py-1.5 font-mono text-[11px] text-lp-muted">
+            the sliver, magnified ~2000× — this is the whole platform
+          </div>
+          <div class="flex h-11 flex-wrap items-center justify-between gap-x-4 px-4 font-mono text-xs">
+            <span class="text-lp-accent">oracle.claim · 2.4ms mean</span>
+            <span class="text-lp-muted">the platform adds ~0.05% of wall-clock</span>
+          </div>
+        </div>
       </div>
     </div>
 
-    <figcaption class="mt-3 flex flex-wrap items-baseline justify-between gap-2 font-mono text-xs text-lp-muted">
-      <span>drawn to actual scale — the sliver on the right is the entire platform</span>
-      <span class="text-lp-fg">oracle.claim · <b>2.4ms</b> mean · the platform adds ~0.05%</span>
+    <figcaption class="flex flex-wrap items-baseline justify-between gap-2 border-t border-lp-border px-4 py-2.5 font-mono text-xs text-lp-muted">
+      <span>hover or tap the sliver on the right — it's the entire platform</span>
+      <span class="text-lp-fg">oracle.claim · <b>2.4ms</b> mean · ~0.05%</span>
     </figcaption>
   </figure>
 
@@ -48,6 +66,18 @@ import Section from './Section.astro'
     answer, whether it's in another process, on another machine, or running tomorrow.
   </p>
 </Section>
+
+<style>
+  /* a soft beacon on the sliver so the eye finds the interactive 2px —
+     decoration only; the global reduced-motion kill flattens it */
+  .bet-sliver {
+    animation: bet-sliver 2.8s ease-in-out infinite;
+  }
+  @keyframes bet-sliver {
+    0%, 100% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--lp-accent) 45%, transparent); }
+    50% { box-shadow: 0 0 12px 2px color-mix(in oklab, var(--lp-accent) 25%, transparent); }
+  }
+</style>
 
 <script>
   // magnifier: hover or tap/Enter the sliver's 44px hit area to zoom it.

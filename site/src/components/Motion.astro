@@ -118,7 +118,8 @@
     rise('#studio figure', { trigger: '#studio .grid', x: (i) => (i % 2 ? 32 : -32), stagger: 0.1 })
     rise('#mcp .grid > div', { trigger: '#mcp .grid', x: (i) => (i % 2 ? 32 : -32) })
     rise('#start ol li', { trigger: '#start ol', stagger: 0.09, y: 20 })
-    rise('#limits li', { trigger: '#limits', stagger: 0.05, y: 14 })
+    rise('#limits .lm-card', { trigger: '#limits', stagger: 0.08, y: 18 })
+    rise('#limits .rm-rail', { x: 32 })
     rise('footer > div > *', { trigger: 'footer', stagger: 0.1, y: 16 })
 
     // a11y: reveals fade opacity only, so unrevealed content stays in the
