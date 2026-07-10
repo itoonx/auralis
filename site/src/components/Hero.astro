@@ -27,15 +27,26 @@ const clone = 'git clone https://github.com/itoonx/Auralis'
     </p>
 
     <div class="hero-ctas mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
-      <!-- aria-live: the ✓ copied swap is a status message (WCAG 4.1.3) —
-           without it, screen-reader users get no confirmation the copy worked -->
+      <!-- the command stays put; a copy icon on the right flips to a check on
+           click. the sr-only live region announces the copy (WCAG 4.1.3) so
+           screen-reader users get the same confirmation the icon gives. -->
       <button
         id="clone-cta"
         type="button"
         data-cmd={clone}
-        aria-live="polite"
-        class="w-fit cursor-pointer rounded border border-lp-border bg-lp-surface/80 px-5 py-3 font-mono text-sm text-lp-fg backdrop-blur transition-colors hover:border-lp-muted"
-        title="copy to clipboard">$ {clone}</button>
+        class="group flex w-fit cursor-pointer items-center gap-3 rounded border border-lp-border bg-lp-surface/80 px-5 py-3 font-mono text-sm text-lp-fg backdrop-blur transition-colors hover:border-lp-muted"
+        title="copy to clipboard">
+        <span>$ {clone}</span>
+        <span class="relative inline-flex size-4 shrink-0" aria-hidden="true">
+          <svg id="clone-copy" class="absolute inset-0 size-4 text-lp-muted transition-opacity group-hover:text-lp-fg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="9" y="9" width="11" height="11" rx="2" /><path d="M5 15V5a2 2 0 0 1 2-2h10" />
+          </svg>
+          <svg id="clone-check" class="absolute inset-0 size-4 text-lp-accent opacity-0 transition-opacity" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M20 6 9 17l-5-5" />
+          </svg>
+        </span>
+        <span id="clone-status" class="sr-only" aria-live="polite"></span>
+      </button>
     </div>
     <p class="hero-note mt-3 font-mono text-xs text-lp-muted">
       running in five commands · no API key — workers reuse your Claude Code login
@@ -44,19 +55,26 @@ const clone = 'git clone https://github.com/itoonx/Auralis'
 </header>
 
 <script>
-  // copy-command CTA — speaks the event vocabulary (✓) for 800ms
+  // copy-command CTA — the command text stays; only the trailing icon swaps
+  // copy → check for 1.2s. the sr-only status region announces it for AT.
   const cta = document.getElementById('clone-cta') as HTMLButtonElement | null
-  if (cta) {
-    const original = cta.textContent
+  const copyIcon = document.getElementById('clone-copy')
+  const checkIcon = document.getElementById('clone-check')
+  const status = document.getElementById('clone-status')
+  if (cta && copyIcon && checkIcon) {
+    let revert = 0
     cta.addEventListener('click', async () => {
       try {
         await navigator.clipboard.writeText(cta.dataset.cmd!)
-        cta.textContent = '✓ copied'
-        cta.classList.add('text-lp-accent')
-        setTimeout(() => {
-          cta.textContent = original
-          cta.classList.remove('text-lp-accent')
-        }, 800)
+        copyIcon.classList.add('opacity-0')
+        checkIcon.classList.remove('opacity-0')
+        if (status) status.textContent = 'copied to clipboard'
+        clearTimeout(revert)
+        revert = window.setTimeout(() => {
+          copyIcon.classList.remove('opacity-0')
+          checkIcon.classList.add('opacity-0')
+          if (status) status.textContent = ''
+        }, 1200)
       } catch {
         /* clipboard unavailable — the command is selectable text either way */
       }

@@ -1,9 +1,12 @@
 ---
 import Section from './Section.astro'
+import SectionBadge from './SectionBadge.astro'
+import { sectionLabel } from '../lib/sections'
 ---
 
 <Section id="bet">
-  <h2 class="max-w-3xl text-balance font-sans text-3xl font-medium lowercase leading-snug text-lp-fg md:text-4xl">
+  <SectionBadge label={sectionLabel('bet')!} />
+  <h2 class="mt-3 max-w-3xl text-balance font-serif text-4xl font-medium lowercase leading-tight tracking-tight text-lp-fg md:text-5xl">
     when you run many agents on one codebase, the model isn't the bottleneck — the shared state is.
   </h2>
 

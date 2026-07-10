@@ -23,15 +23,20 @@ const project: Array<[string, string]> = [
           one shared, persistent brain for fleets of ai coding agents — measured on live runs, not
           asserted.
         </p>
-        <!-- aria-live: the ✓ copied swap is a status message (WCAG 4.1.3) -->
+        <!-- the command stays put; a copy icon flips to a check on click, and
+             the sr-only live region announces it (WCAG 4.1.3) -->
         <button
           id="clone-footer"
           type="button"
           data-cmd={clone}
-          aria-live="polite"
           title="copy to clipboard"
-          class="mt-6 w-fit cursor-pointer rounded border border-lp-border bg-lp-surface px-4 py-2.5 text-left font-mono text-xs text-lp-fg transition-colors hover:border-lp-muted">
-          <span class="text-lp-accent" aria-hidden="true">$</span> {clone}
+          class="mt-6 flex w-fit cursor-pointer items-center gap-3 rounded border border-lp-border bg-lp-surface px-4 py-2.5 text-left font-mono text-xs text-lp-fg transition-colors hover:border-lp-muted">
+          <span><span class="text-lp-accent" aria-hidden="true">$</span> {clone}</span>
+          <span class="relative inline-flex size-3.5 shrink-0" aria-hidden="true">
+            <svg id="clone-footer-copy" class="absolute inset-0 size-3.5 text-lp-muted transition-opacity" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2" /><path d="M5 15V5a2 2 0 0 1 2-2h10" /></svg>
+            <svg id="clone-footer-check" class="absolute inset-0 size-3.5 text-lp-accent opacity-0 transition-opacity" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
+          </span>
+          <span id="clone-footer-status" class="sr-only" aria-live="polite"></span>
         </button>
       </div>
 
@@ -63,27 +68,33 @@ const project: Array<[string, string]> = [
     </div>
 
     <div class="mt-14 flex flex-wrap items-center gap-x-6 gap-y-2 border-t border-lp-border pt-6 font-mono text-xs text-lp-muted">
-      <span>© 2026 auralis · <a class="underline underline-offset-4 hover:text-lp-fg" href="https://github.com/itoonx/Auralis/blob/main/LICENSE">mit license</a></span>
-      <span>static html — no tracking, no cookies</span>
-      <span class="md:ml-auto">data on this page: run {shortRunId(runData.runId)} · recorded {recordedDate}</span>
+      <span>© 2026 auralis labs · <a class="underline underline-offset-4 hover:text-lp-fg" href="https://github.com/itoonx/Auralis/blob/main/LICENSE">MIT License</a></span>
+      <span class="md:ml-auto">run {shortRunId(runData.runId)} · recorded {recordedDate}</span>
     </div>
   </div>
 </footer>
 
 <script>
-  // same copy vocabulary as the hero CTA (✓ for 800ms)
+  // same copy vocabulary as the hero CTA — the icon swaps copy → check for
+  // 1.2s; the command text never changes
   const cta = document.getElementById('clone-footer') as HTMLButtonElement | null
-  if (cta) {
-    const original = cta.innerHTML
+  const copyI = document.getElementById('clone-footer-copy')
+  const checkI = document.getElementById('clone-footer-check')
+  const status = document.getElementById('clone-footer-status')
+  if (cta && copyI && checkI) {
+    let revert = 0
     cta.addEventListener('click', async () => {
       try {
         await navigator.clipboard.writeText(cta.dataset.cmd!)
-        cta.textContent = '✓ copied'
-        cta.classList.add('text-lp-accent')
-        setTimeout(() => {
-          cta.innerHTML = original
-          cta.classList.remove('text-lp-accent')
-        }, 800)
+        copyI.classList.add('opacity-0')
+        checkI.classList.remove('opacity-0')
+        if (status) status.textContent = 'copied to clipboard'
+        clearTimeout(revert)
+        revert = window.setTimeout(() => {
+          copyI.classList.remove('opacity-0')
+          checkI.classList.add('opacity-0')
+          if (status) status.textContent = ''
+        }, 1200)
       } catch {
         /* clipboard unavailable — the command is selectable text either way */
       }

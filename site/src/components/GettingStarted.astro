@@ -30,7 +30,7 @@ const steps = [
 ]
 ---
 
-<Section id="start" title="running in five commands">
+<Section id="install" title="running in five commands">
   <!-- a rail of mini terminals: number nodes ride a vertical line (md+),
        every command block carries its own copy button (hero's ✓ vocabulary) -->
   <ol class="flex flex-col gap-5 md:border-l md:border-lp-border md:pl-10">
@@ -89,7 +89,7 @@ const steps = [
 
 <script>
   // one handler wires every per-step copy button — same 800ms ✓ as the hero
-  document.querySelectorAll<HTMLButtonElement>('#start button[data-cmd]').forEach((btn) => {
+  document.querySelectorAll<HTMLButtonElement>('#install button[data-cmd]').forEach((btn) => {
     const original = btn.textContent
     btn.addEventListener('click', async () => {
       try {
