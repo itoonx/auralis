@@ -37,7 +37,7 @@ describe("sleep server half (needs the test oracle)", () => {
     const r = await fetch(new URL("/api/sleep", base), { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
     expect(r.ok).toBe(true);
     const out = (await r.json()) as any;
-    expect(String(out.snapshot)).toMatch(/backups\/pre-sleep-.*\.db$/); // U7 ran before any mutation
+    expect(String(out.snapshot)).toMatch(/backups\/pre-.*sleep-.*\.db$/); // U7 ran before any mutation (name carries the brain basename)
     // One of the pair lost; the winner is still findable and the pair no longer double-surfaces.
     const hits = await oracle.search("RetryPolicy retry wait seconds", { project, limit: 5 });
     const live = hits.filter((h) => !h.supersededBy && [a.id, b.id].includes(h.id));
