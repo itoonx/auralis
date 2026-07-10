@@ -13,10 +13,19 @@
 >    docs, no collateral loss. C2: `scrub()` in `hooks/session-capture.mjs` redacts sk-*/ghp_*/AKIA*/AIza*/
 >    xox*/Bearer/PEM at ingress (applied to prompt + assistant text, before learn/event/recall). Test in
 >    `test/session-capture.test.ts` (synthetic keys). Prod brain is gitignored (never committed).
-> 3. **R3-lite exhaustive retrieval** — 2 counting-dilution losses (bike-$, projects) need every-match-above-floor.
-> 4. **R4 query expansion** — scope SHRANK to ~2 pure-paraphrase losses (doctors↔Dr., dinner↔basil/mint);
->    cheap-LLM rewrite, probe-first. Semantic-embedder upside now ~2-5 pts (BGE-M3 stays parked).
-> 5. **Merge `fix-recall` → main** on user approval; then controlled baseline (R1) with the fixed retrieval.
+> 3. ~~**R3-lite exhaustive retrieval**~~ ❌ **REFUTED (2026-07-10)** — probed gold-session/chunk recall at
+>    k=48,100,200,400,800 on the 7 counting losses: **dead flat, 0/7 flipped**. The missing evidence is rank-∞
+>    (the counting question shares no words with "Tamiya Spitfire"/"Tiger tank"), NOT rank-49+. Raising the
+>    limit / exhaustive floor moves nothing. (Verify-reality saved a no-op build — see PRD.)
+> 4. ~~**R4 query expansion**~~ ✅ **VERIFIED +3 (2026-07-10): subset90 81/90 (90.0%) → 84/90 (93.3%)** on the
+>    SAME instrument. Blind LLM expansion (instance-vocabulary from the question ONLY, no data: "doctors"→
+>    "dermatologist ENT cardiologist…") recovered retrieval coverage gold-doc 8/21→17/21, gold-session
+>    17/18→18/18; harness evidAllDeep 73/90→80/90. Score flips matched the per-item prediction: WON model-kits,
+>    bike-$, doctors, cocktail-pref; LOST 1 (dd2973ad — expansion noise pushed a gold session out of top-48).
+>    Harness path: `LME_EXPAND_FILE` (question_id→terms), widens the RETRIEVAL query only; reader sees the real
+>    question. **Production expansion needs a live LLM (deferred, same credit block as the reader).** Note:
+>    semantic-embedder upside stays small — misses are lexical-counting, not paraphrase → BGE-M3 stays parked.
+> 5. **Merge `fix-recall` → main** DONE. Controlled baseline (R1) still blocked on paid LLM / credit.
 
 Companion to `prd-fix-recall.md` (the why). This is the what/who — each task has a deliverable, the files it
 OWNS (so parallel workers don't clash), what it depends on, and its acceptance gate.

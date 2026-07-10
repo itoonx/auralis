@@ -23,6 +23,11 @@ const JUDGE_MODEL = process.env.LME_JUDGE_MODEL ?? "gpt-5"; // openai judge mode
 const LIMIT = Number(process.env.LME_LIMIT ?? 0);
 const CONC = Number(process.env.LME_CONCURRENCY ?? 3);
 const EXPAND = process.env.LME_EXPAND !== "0"; // M2 adjacency (default ON = shipped); LME_EXPAND=0 = pre-M2 baseline arm
+// R4 query expansion: a counting question ("how many model kits") shares no words with the memories that
+// answer it ("Tamiya Spitfire", "Tiger tank") — verified the missing chunks are rank-∞, not rank-49+ (raising
+// top-k was flat 48→800). LME_EXPAND_FILE maps question_id → instance-vocabulary terms (LLM-generated from
+// the question ALONE, no data); they widen the RETRIEVAL query only — the reader still sees the real question.
+const EXPANSIONS: Record<string, string> = process.env.LME_EXPAND_FILE ? JSON.parse(readFileSync(process.env.LME_EXPAND_FILE, "utf8")) : {};
 // Every ask()/judge query() below is an SDK sub-session that inherits this repo's Claude Code hooks. Without
 // this, session-capture writes each benchmark answer-prompt into the HUMAN's prod brain (found live: 89 LME
 // docs leaked). The spawned CLI inherits process.env, so setting it here stands the hook down for sub-queries.
@@ -168,7 +173,8 @@ async function runOne(oracle: OracleAdapter, q: Q): Promise<{ id: string; type: 
   const seen = new Map<string, (typeof hits0)[number]>();
   // M2 adjacency expansion: top hits carry their insertion-order neighbours — the answer to
   // "what came after X" sits in the chunk NEXT to the one that matches the question's words.
-  const hits0 = await oracle.search(q.question, { project, limit: 48, expand: EXPAND });
+  const retrievalQuery = EXPANSIONS[q.question_id] ? `${q.question} ${EXPANSIONS[q.question_id]}` : q.question;
+  const hits0 = await oracle.search(retrievalQuery, { project, limit: 48, expand: EXPAND });
   for (const h of hits0.slice(0, 12)) seen.set(h.id, h);
   for (const ent of extractEntities(q.question).slice(0, 3)) {
     for (const h of await oracle.search(ent, { project, limit: 4 })) if (!seen.has(h.id)) seen.set(h.id, h);
