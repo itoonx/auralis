@@ -678,7 +678,8 @@ const server = Bun.serve({
       let sql = `SELECT run_id AS runId, COUNT(*) AS events, COUNT(DISTINCT node_id) AS tasks,
         MIN(ts) AS firstTs, MAX(ts) AS lastTs, MAX(seq) AS lastSeq,
         SUM(kind = 'dedup') AS deduped, SUM(kind = 'overlap') AS overlaps,
-        SUM(kind = 'repair') AS repairs, SUM(kind = 'note') AS notes
+        SUM(kind = 'repair') AS repairs, SUM(kind = 'note') AS notes,
+        SUM(kind = 'prompt') AS prompts, SUM(kind = 'answer') AS answers
         FROM events`;
       const params: any[] = [];
       if (project) { sql += " WHERE project = ?"; params.push(project); }
