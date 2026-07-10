@@ -14,9 +14,12 @@ const overlap = runData.events.find((e) => e.kind === 'overlap')
         must <span class="font-mono text-lp-fg">claim</span> it. if a teammate owns it, the read is
         blocked at the tool boundary and the worker is redirected to the existing finding.
       </p>
+      <!-- keep the <b> and its neighbouring words on one line, spaces on both
+           sides — the minifier eats newline-only gaps next to tags and glues
+           the words together -->
       <p>
-        deterministic, not persuasive: on a live 3-worker run this prevented
-        <b class="font-mono text-lp-fg">4 duplicate reads</b> before they happened — redundant
+        deterministic, not persuasive: on a live 3-worker run this prevented <b class="font-mono text-lp-fg">4 duplicate reads</b> before
+        they happened — redundant
         reads hit 0. the same gate, turned around, guards Write in build mode:
         claim-on-write means <b class="font-mono text-lp-fg">no clobbers</b> (claim ON:
         prevented-clobbers=1, collisions=0 · claim OFF: collisions=1).
