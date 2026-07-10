@@ -85,12 +85,14 @@ import Section from './Section.astro'
       <p class="mt-2 text-xs leading-5 text-lp-muted">a forced FAIL fed its fail lines to the rework; attempt #2 passed. the loop closes itself.</p>
     </li>
   </ol>
+  <!-- keep the <span> and its neighbouring words on one line, spaces on both
+       sides — the minifier eats newline-only gaps next to tags and glues the
+       words together -->
   <p class="mt-8 max-w-2xl text-sm text-lp-muted">
     measured: a 3-file REST API (store / router / server, interfaces agreed via the brain, reuses=2)
     and an expression-evaluator CLI (lexer → parser → cli), both first-try PASS — verified
-    independently, including a server-restart persistence check.
-    <span class="text-lp-fg">proven small, not scaled</span> — clean decompositions, disjoint
-    files; overlapping-edit merges and a true sandbox are roadmap.
+    independently, including a server-restart persistence check. <span class="text-lp-fg">proven small, not scaled</span> — clean
+    decompositions, disjoint files; overlapping-edit merges and a true sandbox are roadmap.
   </p>
 </Section>
 

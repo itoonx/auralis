@@ -21,6 +21,12 @@ const diagram = `             mozaik · one shared event bus (the society)
       <!-- box-drawing characters read as noise character-by-character in a
            screen reader — hide the art, provide the same content as prose -->
       <pre aria-hidden="true" class="font-mono text-xs leading-relaxed text-lp-muted md:text-[13px]"><code>{diagram}</code></pre>
+      <!-- gloss the diagram's two proper names — by name alone a first-time
+           reader can't tell the external runtime from the in-repo component.
+           inline elements stay on one line: the minifier eats newline-only gaps -->
+      <p class="mt-4 border-t border-lp-border pt-3 text-xs leading-5 text-lp-muted">
+        <a class="font-mono text-lp-fg underline-offset-4 hover:underline" href="https://github.com/jigjoy-ai/mozaik">mozaik ↗</a> — the agent runtime auralis runs on · <span class="font-mono text-lp-fg">oracle-lite</span> — auralis's own brain, part of this repo
+      </p>
       <p class="sr-only">
         architecture diagram: mozaik is one shared event bus (the society) where Planner,
         Conductor, and N Workers on any agent runtime — plus MemoryLibrarian, Sentry, Critic, and
@@ -31,9 +37,11 @@ const diagram = `             mozaik · one shared event bus (the society)
       </p>
     </div>
     <div class="flex flex-col gap-4 text-sm text-lp-muted">
+      <!-- keep the <span>s and their neighbouring words on one line, spaces on
+           both sides — the minifier eats newline-only gaps next to tags -->
       <p>
-        left arrow = <span class="text-lp-fg">memory</span> (what agents know) · right arrow =
-        <span class="text-lp-fg">policy</span> (who's doing what). both central, so every process,
+        left arrow = <span class="text-lp-fg">memory</span> (what agents know) · right arrow = <span class="text-lp-fg">policy</span> (who's
+        doing what). both central, so every process,
         model, and machine shares them.
       </p>
       <p>

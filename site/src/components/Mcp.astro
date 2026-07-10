@@ -16,10 +16,12 @@ const ingress = [
 <Section id="mcp" title="claude code + mcp — session memory, both ways">
   <div class="grid gap-10 lg:grid-cols-[1fr_1.2fr]">
     <div class="flex min-w-0 flex-col gap-4 text-pretty text-sm text-lp-muted">
+      <!-- keep the <span>s and their neighbouring words on one line, spaces on
+           both sides — the minifier eats newline-only gaps next to tags and
+           glues the words together -->
       <p>
-        add one block to <span class="font-mono text-lp-fg">.mcp.json</span> and your session gets
-        <span class="font-mono text-lp-fg">analyze</span> and
-        <span class="font-mono text-lp-fg">build</span> tools — Claude calling auralis calling
+        add one block to <span class="font-mono text-lp-fg">.mcp.json</span> and your session gets <span class="font-mono text-lp-fg">analyze</span> and <span class="font-mono text-lp-fg">build</span> tools
+        — Claude calling auralis calling
         Claude, proven live (analyze answered in 49s; progress notifications keep long builds alive).
       </p>
       <p>
