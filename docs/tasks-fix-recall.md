@@ -120,6 +120,19 @@ subset90 so it's directly comparable to memory's 85/90:
   The mistake was mine: I asserted token cost from *file size* (a HYPOTHESIS) instead of verifying *actual
   consumption* (rule 1: assert the outcome, not the call) — the 6th silent failure of the project.
 
+- **R1-3 RE-MEASURED with TRUE full-context (2026-07-10) — full-ingestion reader (excerpts split into 500-line
+  parts, reader reads EVERY part, no grep; verified: 15/15 agents ingested >100k of real context, avg 214k incl.
+  cache).** On the 15 multi-session questions: **memory 13/15 = TRUE full-context 13/15 (TIE)** — they trade one
+  win each (memory wins 0a995998 counting where true-full miscounts even with everything; true-full wins
+  c4a1ceb8 where memory's retrieval dropped the "lemon" evidence; both miss 6d550036, gold=2 ambiguous). The
+  grep-based "full-context" scored 12/15 — its losses (e.g. gpt4_d84a3211 bike-$: grep-full $65 WRONG vs
+  true-full $185 CORRECT) show the earlier "memory beats full-context by 4" was largely a **grep-truncation
+  artifact**, now retracted. **CORRECTED token benefit (verified actual consumption, not file size): memory
+  matches true full-context accuracy at ~13-14× fewer tokens (9.1k vs ~125k).** The honest thesis: the memory
+  layer is a **token optimization that PRESERVES accuracy** (≈ full-context) at ~1/13 the cost — not "higher
+  accuracy AND cheaper". STILL OPEN: preference wins (0edc2aef, 75832dbd) not yet re-tested with true full
+  ingestion (may also flip). Artifacts: `scratchpad/r1pilot/ans_fulltrue/`, `r1_fulltrue_wf.js`.
+
 - **R1-3 · three-way delta report** ⚠️ **SUPERSEDED BY THE CORRECTION ABOVE — full-context invalid.** FULL 90×3 (2026-07-10, uniform 90-agent judge panel).
   **memory 84/90 (93.3%) · full-context 81/90 (90.0%) · grep 54/90 (60.0%).** memory ≥ full-context on **89/90**
   questions (mem-wins-4, full-wins-1). **BENEFIT (the token-optimization headline):** measured token cost —
