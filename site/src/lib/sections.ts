@@ -6,8 +6,8 @@
 export interface SectionLink {
   id: string
   label: string
-  // install already leads the top-level nav; keep its badge but drop it from
-  // the "more" index so it isn't listed twice
+  // top-level nav items (install, architecture) keep their badge but drop out
+  // of the "more" index so they aren't listed twice
   hideInMenu?: boolean
 }
 
@@ -16,7 +16,7 @@ export const SECTIONS: SectionLink[] = [
   { id: 'problem', label: 'the problem' },
   { id: 'bet', label: 'the thesis' },
   { id: 'proof', label: 'proven results' },
-  { id: 'architecture', label: 'architecture' },
+  { id: 'architecture', label: 'architecture', hideInMenu: true },
   { id: 'memory', label: 'shared memory' },
   { id: 'coordination', label: 'live coordination' },
   { id: 'build', label: 'build mode' },
