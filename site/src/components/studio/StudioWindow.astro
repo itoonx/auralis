@@ -53,10 +53,11 @@ const pill = `Auralis · ${runData.derived.byKind.finding} findings · ${runData
   </div>
   ── end browser chrome */}
 
-  {/* ── the app (dark) — a bounded viewport: navbar + rail stay put, only the
-       panel content scrolls. max-height climbs by breakpoint (500 → 600 →
-       670), and by xl the tallest tab fits without a scrollbar. ──────────── */}
-  <div class="st-app dark flex max-h-[500px] flex-col md:max-h-[600px] xl:max-h-[670px]">
+  {/* ── the app (dark) — a fixed-height viewport, one height for every tab so
+       switching never resizes the window: navbar + rail stay put, only the
+       panel content scrolls. the height climbs by breakpoint (500 → 600 →
+       670); by xl the tallest tab (overview) fits without a scrollbar. ────── */}
+  <div class="st-app dark flex h-[500px] flex-col md:h-[600px] xl:h-[670px]">
     <div class="st-appbar flex shrink-0 items-center gap-2 border-b px-3.5 py-2 sm:gap-3 sm:px-4" aria-hidden="true">
       <span class="flex items-center gap-1.5">
         <svg viewBox="0 0 24 24" class="size-4 text-(--primary)" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" set:html={ICON.logo} />
@@ -296,6 +297,12 @@ const pill = `Auralis · ${runData.derived.byKind.finding} findings · ${runData
   @keyframes st-tab-fill {
     from { transform: scaleX(0); }
     to { transform: scaleX(1); }
+  }
+  /* graph fills the whole viewport (its canvas is the point); overview and
+     runs keep their natural height and simply sit at the top of the fixed
+     window, scrolling only when they overflow */
+  #st-panel-graph {
+    height: 100%;
   }
   /* the content viewport scrolls when a tab overflows the bounded height;
      thin scrollbar to match the live studio's chrome */
