@@ -104,14 +104,18 @@ subset90 so it's directly comparable to memory's 85/90:
 - **R1-2 · grep mode** ✅ **BUILT (2026-07-10)** — `LME_MODE=grep`: lexical top-96 turns by question-word
   overlap over RAW turns — no chunking/edges/RRF/entity/expansion (isolates "does the memory LAYER beat dumb
   keyword match?"). Same reader. Files: `src/run-longmemeval.ts`.
-- **R1-3 · three-way delta report** — memory vs full-context vs grep, per-type table, same reader+judge.
-  **PILOT DONE (6 Qs, 1/type, self-judged): memory 5/6 · full-context 4/6 · grep 3/6.** Direction =
-  memory ≥ full-context ≥ grep (POSITIVE for the thesis, against the literature's "memory < full-context").
-  Key discriminator `0a995998` (multi-session counting): memory answered "3" (correct), full-context "2"
-  (WRONG — lost-in-the-middle across 122k tok), grep couldn't total → memory's compression makes multi-session
-  evidence salient where dump-everything drowns it. **CAVEAT: n=6, noise ±17%/question — directional only, not
-  conclusive; 1 temporal Q tied (all wrong 6 vs gold 7).** Next: full 90×3 (~13M tok) or 30-Q mid-pilot to
-  confirm. Reproduce: DUMP each arm → reader subagents (same prompt) → judge.
+- **R1-3 · three-way delta report** ✅ **DONE — FULL 90×3 (2026-07-10, uniform 90-agent judge panel).**
+  **memory 84/90 (93.3%) · full-context 81/90 (90.0%) · grep 54/90 (60.0%).** memory ≥ full-context on **89/90**
+  questions (mem-wins-4, full-wins-1). **BENEFIT (the token-optimization headline):** measured token cost —
+  memory **9.1k** tok/q, full-context **117.6k** (12.9×), grep 52.4k (5.7×). memory is **Pareto-superior**:
+  +3.3pp accuracy AND 12.9× fewer tokens → **13.4× more correct answers per token**; higher accuracy at **7.8%**
+  of full-context's token cost. The memory layer IS a token optimization (117k→9k, −92%, accuracy UP). memory's
+  4 wins are all lost-in-the-middle on multi-session/preference (full has the info, drowns in 122k); its 1 loss
+  (c4a1ceb8) is an honest retrieval miss full-context's completeness caught. 5 all-3-wrong (3 temporal
+  date-arithmetic + 1 un-retrievable "Target" + 1 ambiguous count) are shared by full-context → residual is
+  reader/temporal, NOT the memory layer. Self-judge (not official gpt-4o) → relative deltas valid, absolute not
+  comparable to 53.4%. Artifacts: `scratchpad/r1pilot/RESULT90.md`, `verdicts90.json`. **THESIS HOLDS — memory
+  beats full-context, against the literature.** Next: token optimization WITHIN the 9k memory budget.
 
 **Execution order (cost-guarded):** R1-1 + R1-2 build (cheap, ~1 worker, share the harness → serialize) →
 **PILOT: 6 Qs (1/type) or the 15 multi-session across all 3 arms** → read the DIRECTION → only then decide
