@@ -65,9 +65,9 @@
       .from('#hero .hero-copy', { y: 14, opacity: 0 }, '-=0.5')
       .from('#hero .hero-ctas', { y: 12, opacity: 0 }, '-=0.4')
       .from('#hero .hero-note', { opacity: 0 }, '-=0.35')
-      // the terminal peeks above the fold, so it enters with the hero — a
-      // scroll reveal would never fire (its start sits above scroll 0)
-      .from('#replay figure', { y: 32, opacity: 0, duration: 0.7 }, '-=0.3')
+      // the studio window peeks above the fold, so it enters with the hero —
+      // a scroll reveal would never fire (its start sits above scroll 0)
+      .from('#studio figure', { y: 32, opacity: 0, duration: 0.7 }, '-=0.3')
 
     // ---- scroll reveals, per component ---------------------------------
     // one vocabulary: rise 20-24px + fade, staggered by group, fired once at
@@ -102,7 +102,8 @@
       })
     })
 
-    rise('#replay .rp-lead', { y: 28 })
+    rise('#replay figure', { y: 28 })
+    rise('#architecture .rp-lead', { y: 28 })
     rise('#problem .grid > div', { trigger: '#problem .grid', stagger: 0.12 })
     rise('#bet h2 + figure', { y: 28 })
     rise('#bet figure ~ p')
@@ -115,7 +116,6 @@
     rise('#coordination figure', { x: 32 })
     rise('#build ol li', { trigger: '#build ol', stagger: 0.09 })
     rise('#build ol ~ p')
-    rise('#studio figure', { trigger: '#studio .grid', x: (i) => (i % 2 ? 32 : -32), stagger: 0.1 })
     rise('#mcp .grid > div', { trigger: '#mcp .grid', x: (i) => (i % 2 ? 32 : -32) })
     rise('#start ol li', { trigger: '#start ol', stagger: 0.09, y: 20 })
     rise('#limits .lm-card', { trigger: '#limits', stagger: 0.08, y: 18 })

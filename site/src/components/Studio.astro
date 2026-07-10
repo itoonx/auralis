@@ -1,45 +1,28 @@
 ---
-import Section from './Section.astro'
-import { runData, fmtOffset } from '../lib/run'
+import StudioGraph from './studio/StudioGraph.astro'
+import StudioOverview from './studio/StudioOverview.astro'
+import StudioRuns from './studio/StudioRuns.astro'
+import StudioWindow from './studio/StudioWindow.astro'
 
-// Same recorded events, two skins: the CLI reader line and its studio timeline
-// row — "mirror the CLI" made literal.
-const sample = runData.events.filter((e) => e.kind !== 'prompt' && e.text).slice(0, 4)
+// The studio itself, right under the hero — one window, a real rail: click
+// overview / runs / graph to swap the recreated page. No Section wrapper:
+// like the terminal that used to live here, it reads as part of the hero
+// composition (no title, no top border; the hero's bottom padding sets the
+// gap).
 ---
 
-<Section id="studio" title="the studio — watch it think">
-  <p class="mb-8 max-w-2xl text-lp-muted">
-    every step of every run — plans, tool calls, verdicts, reworks — timed, narrated, and
-    replayable. the timeline reads the same in the studio and in the terminal: one vocabulary of
-    glyphs. it's the same timing sink that produced the 99.9% number above — observability is how
-    the bet was proven.
-  </p>
-  <div class="grid gap-6 lg:grid-cols-2">
-    <figure class="overflow-hidden rounded-md border border-lp-border bg-lp-surface">
-      <div class="border-b border-lp-border px-4 py-2 font-mono text-xs text-lp-muted">terminal reader</div>
-      <ol class="overflow-x-auto px-4 py-3 font-mono text-xs leading-6">
-        {sample.map((e) => (
-          <li class="whitespace-nowrap text-lp-muted">
-            <span class="text-lp-muted">{fmtOffset(e.t)}</span>
-            <span class="ml-3">{(e.text ?? '').slice(0, 72)}…</span>
-          </li>
-        ))}
-      </ol>
-    </figure>
-    <figure class="overflow-hidden rounded-md border border-lp-border bg-lp-surface-2">
-      <div class="border-b border-lp-border px-4 py-2 font-mono text-xs text-lp-muted">studio timeline · same events</div>
-      <ol class="px-4 py-3">
-        {sample.map((e) => (
-          <li class="mb-2 flex items-center gap-3 rounded border border-lp-border bg-lp-surface px-3 py-1.5">
-            <span class="font-mono text-[11px] text-lp-muted">{fmtOffset(e.t)}</span>
-            <span class="rounded bg-lp-surface-2 px-1.5 py-0.5 font-mono text-[11px] text-lp-muted">{e.kind}</span>
-            <span class="truncate font-mono text-xs text-lp-fg">{e.actor}</span>
-          </li>
-        ))}
-      </ol>
+<section id="studio" class="relative">
+  <div class="mx-auto max-w-6xl px-6 pb-20 md:pb-28">
+    <figure class="text-left">
+      <StudioWindow>
+        <StudioOverview slot="overview" />
+        <StudioRuns slot="runs" />
+        <StudioGraph slot="graph" />
+      </StudioWindow>
+      <!-- <figcaption class="mt-2 font-mono text-xs text-lp-muted">
+        not a screenshot — the studio rebuilt in html from the run recorded on this page, in the
+        exact theme tokens it ships with · the rail switches pages · live at localhost:47780
+      </figcaption> -->
     </figure>
   </div>
-  <p class="mt-4 font-mono text-xs text-lp-muted">
-    a recorded capture — the live studio runs next to your terminal at localhost:47780 during a run.
-  </p>
-</Section>
+</section>

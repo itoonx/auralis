@@ -1,0 +1,23 @@
+---
+// Event-kind chip — icon + word, mirroring the studio's KindChip vocabulary.
+import { ICON } from './icons'
+
+interface Props {
+  kind: string
+}
+const { kind } = Astro.props
+
+const META: Record<string, { icon: string; word: string; cls: string }> = {
+  phase: { icon: 'phase', word: 'phase', cls: 'st-k-phase' },
+  intent: { icon: 'task', word: 'task', cls: 'st-k-task' },
+  trace: { icon: 'tool', word: 'tool', cls: 'st-k-tool' },
+  finding: { icon: 'finding', word: 'finding', cls: 'st-k-finding' },
+  overlap: { icon: 'overlap', word: 'overlap', cls: 'st-k-overlap' },
+}
+const m = META[kind] ?? META.trace
+---
+
+<span class:list={['st-chip', m.cls]}>
+  <svg viewBox="0 0 24 24" class="size-3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" set:html={ICON[m.icon]} />
+  {m.word}
+</span>

@@ -1,5 +1,8 @@
 ---
 import Section from './Section.astro'
+import { runData } from '../lib/run'
+
+const d = runData.derived
 
 const diagram = `             mozaik · one shared event bus (the society)
    ┌──────────────────────────────────────────────────────────┐
@@ -56,7 +59,145 @@ const diagram = `             mozaik · one shared event bus (the society)
       </p>
     </div>
   </div>
+
+  <!-- the architecture, proven on the run this page records — the diagram
+       animates the story (findings converge on one brain, an overlap gets
+       flagged, recall flows back) and is decoration only; the copy carries
+       the claim. -->
+  <div class="rp-lead mt-8 rounded-2xl border border-lp-border bg-lp-surface p-6 transition-colors hover:border-lp-muted/40 md:p-8">
+    <div class="grid items-center gap-8 lg:grid-cols-[minmax(280px,380px)_1fr]">
+      <div class="text-lp-muted" aria-hidden="true">
+        <svg viewBox="0 0 320 190" class="w-full" fill="none" stroke-linecap="round">
+          <text x="24" y="14" font-size="9" fill="currentColor" opacity=".55" font-family="var(--font-mono)">your agents</text>
+          <text x="118" y="26" font-size="9" fill="currentColor" opacity=".45" font-family="var(--font-mono)">findings →</text>
+          <text x="118" y="182" font-size="9" fill="currentColor" opacity=".45" font-family="var(--font-mono)">← recall</text>
+
+          <!-- the fleet -->
+          <text x="16" y="37" font-size="8" fill="currentColor" opacity=".5" font-family="var(--font-mono)">w1</text>
+          <text x="16" y="79" font-size="8" fill="currentColor" opacity=".5" font-family="var(--font-mono)">w2</text>
+          <text x="16" y="121" font-size="8" fill="currentColor" opacity=".5" font-family="var(--font-mono)">w3</text>
+          <text x="16" y="163" font-size="8" fill="currentColor" opacity=".5" font-family="var(--font-mono)">w4</text>
+          <circle cx="44" cy="34" r="7" stroke="currentColor" stroke-width="1.5" opacity=".7" />
+          <circle cx="44" cy="34" r="2.5" fill="currentColor" class="text-lp-fg" opacity=".85" />
+          <circle cx="44" cy="76" r="7" stroke="currentColor" stroke-width="1.5" opacity=".7" />
+          <circle cx="44" cy="76" r="2.5" fill="currentColor" class="text-lp-fg" opacity=".85" />
+          <circle cx="44" cy="118" r="7" stroke="currentColor" stroke-width="1.5" opacity=".7" />
+          <circle cx="44" cy="118" r="2.5" fill="currentColor" class="text-lp-fg" opacity=".85" />
+          <circle cx="44" cy="160" r="7" stroke="currentColor" stroke-width="1.5" opacity=".7" />
+          <circle cx="44" cy="160" r="2.5" fill="currentColor" class="text-lp-fg" opacity=".85" />
+
+          <!-- lanes into the brain -->
+          <path d="M52 34 C 140 34, 190 70, 226 88" stroke="currentColor" stroke-width="1" opacity=".22" />
+          <path d="M52 76 C 140 76, 180 86, 224 94" stroke="currentColor" stroke-width="1" opacity=".22" />
+          <path d="M52 118 C 140 118, 180 108, 224 100" stroke="currentColor" stroke-width="1" opacity=".22" />
+          <path d="M52 160 C 140 160, 190 124, 226 106" stroke="currentColor" stroke-width="1" opacity=".22" />
+
+          <!-- one brain -->
+          <circle class="rp-ring" cx="252" cy="97" r="26" stroke="currentColor" stroke-width="1" />
+          <circle cx="252" cy="97" r="26" stroke="currentColor" stroke-width="1" opacity=".35" />
+          <circle cx="252" cy="97" r="16" stroke="currentColor" stroke-width="1.5" class="text-lp-accent" opacity=".6" />
+          <circle cx="252" cy="97" r="5" fill="currentColor" class="text-lp-accent" opacity=".95" />
+          <text x="252" y="142" text-anchor="middle" font-size="9" fill="currentColor" opacity=".6" font-family="var(--font-mono)">one brain</text>
+
+          <!-- findings travel in; w2 and w3 arrive together and get flagged -->
+          <circle class="rp-pulse text-lp-fg" r="3" fill="currentColor" opacity="0" style="offset-path:path('M52 34 C 140 34, 190 70, 226 88')" />
+          <circle class="rp-pulse rp-d2 text-lp-fg" r="3" fill="currentColor" opacity="0" style="offset-path:path('M52 76 C 140 76, 180 86, 224 94')" />
+          <circle class="rp-pulse rp-d2 text-lp-fg" r="3" fill="currentColor" opacity="0" style="offset-path:path('M52 118 C 140 118, 180 108, 224 100')" />
+          <circle class="rp-pulse rp-d3 text-lp-fg" r="3" fill="currentColor" opacity="0" style="offset-path:path('M52 160 C 140 160, 190 124, 226 106')" />
+
+          <!-- recall flows back out -->
+          <circle class="rp-return text-lp-accent" r="3" fill="currentColor" opacity="0" style="offset-path:path('M52 34 C 140 34, 190 70, 226 88')" />
+          <circle class="rp-return rp-d5 text-lp-accent" r="3" fill="currentColor" opacity="0" style="offset-path:path('M52 160 C 140 160, 190 124, 226 106')" />
+
+          <g class="rp-warn text-(--lp-warn)">
+            <text x="162" y="99" font-size="12" fill="currentColor">⚠</text>
+            <text x="146" y="114" font-size="8" fill="currentColor" opacity=".85" font-family="var(--font-mono)">overlap flagged</text>
+          </g>
+          <text class="rp-tick text-lp-accent" x="278" y="66" font-size="11" fill="currentColor" font-family="var(--font-mono)">✓</text>
+        </svg>
+      </div>
+
+      <div>
+        <h3 class="font-mono text-sm text-lp-fg">▸ four agents, one brain, zero duplicated work</h3>
+        <p class="mt-3 max-w-2xl text-sm text-lp-muted">
+          this is the run recorded on this page — {d.workers} workers analyzing the claim registry
+          at once. every discovery lands in one shared brain the moment it happens; the fleet is
+          flagged <span class="text-(--lp-warn)">⚠</span> the instant two workers touch the same
+          file, and a claim only counts once it's verified <span class="text-lp-accent">✓</span>.
+        </p>
+        <p class="mt-3 max-w-2xl text-sm text-lp-muted">
+          without a shared brain, agents silently re-discover each other's work. auralis makes
+          coordination explicit and cheap — ~2.4ms per event, so the model keeps 99.9% of the
+          wall-clock.
+        </p>
+        <div class="mt-5 flex flex-wrap gap-2 font-mono text-xs">
+          <span class="rounded-full border border-lp-border bg-lp-bg/60 px-3 py-1 text-lp-muted">{d.workers} workers · one brain</span>
+          <span class="rounded-full border border-lp-border bg-lp-bg/60 px-3 py-1 text-lp-muted"><span class="text-(--lp-warn)">⚠</span> {d.overlapsFlagged} overlaps flagged</span>
+          <span class="rounded-full border border-lp-border bg-lp-bg/60 px-3 py-1 text-lp-muted"><span class="text-lp-accent">✓</span> {d.verified} findings verified</span>
+        </div>
+      </div>
+    </div>
+  </div>
 </Section>
+
+<style>
+  /* lead diagram — findings pulse into the brain, w2+w3 collide and get
+     flagged, recall flows back. base state = the finished picture: lanes,
+     nodes, the flag and the tick all visible; only the pulses rest hidden. */
+  .rp-pulse {
+    animation: rp-travel 7s linear infinite;
+  }
+  .rp-d2 {
+    animation-delay: 1.4s;
+  }
+  .rp-d3 {
+    animation-delay: 2.8s;
+  }
+  @keyframes rp-travel {
+    0% { offset-distance: 0%; opacity: 0; }
+    2% { opacity: 0.9; }
+    19% { opacity: 0.9; }
+    22%, 100% { offset-distance: 100%; opacity: 0; }
+  }
+  .rp-return {
+    animation: rp-recall 7s linear infinite;
+    animation-delay: 4.2s;
+  }
+  .rp-d5 {
+    animation-delay: 4.7s;
+  }
+  @keyframes rp-recall {
+    0% { offset-distance: 100%; opacity: 0; }
+    2% { opacity: 0.9; }
+    19% { opacity: 0.9; }
+    22%, 100% { offset-distance: 0%; opacity: 0; }
+  }
+  .rp-warn {
+    animation: rp-warn 7s ease-in-out infinite;
+  }
+  @keyframes rp-warn {
+    0%, 38% { opacity: 0; }
+    46%, 60% { opacity: 1; }
+    70%, 100% { opacity: 0; }
+  }
+  .rp-tick {
+    animation: rp-tick 7s ease-in-out infinite;
+  }
+  @keyframes rp-tick {
+    0%, 20% { opacity: 0; }
+    26%, 90% { opacity: 0.95; }
+    100% { opacity: 0; }
+  }
+  .rp-ring {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: rp-ring 3.5s ease-out infinite;
+  }
+  @keyframes rp-ring {
+    0% { transform: scale(0.35); opacity: 0.6; }
+    85%, 100% { transform: scale(1.25); opacity: 0; }
+  }
+</style>
 
 <!-- the diagram's scroll reveal moved to Motion.astro (GSAP) — one motion
      system owns every reveal so timings stay consistent page-wide -->

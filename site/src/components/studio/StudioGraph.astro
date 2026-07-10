@@ -1,0 +1,176 @@
+---
+// The studio's graph page, recreated from the recorded run. Nodes and edges
+// are derived at build time from the run's Read/Write traces (worker → file),
+// so the picture is the run's real coordination story: contested files pull
+// to the middle, private files orbit their only reader. Positions are
+// computed here — deterministic, no runtime layout.
+import { runData } from '../../lib/run'
+
+const workers = [...new Set(runData.events.filter((e) => e.kind === 'intent').map((e) => e.actor))]
+const readers = new Map<string, string[]>() // file -> workers that touched it
+for (const e of runData.events) {
+  if (e.kind !== 'trace') continue
+  const m = e.text?.match(/^»\s+(\S+)\s+→\s+(?:Read|Write|Edit)\s+(.+)$/)
+  if (!m) continue
+  const file = m[2].split('/').pop() ?? m[2]
+  const list = readers.get(file) ?? []
+  if (!list.includes(m[1])) list.push(m[1])
+  readers.set(file, list)
+}
+
+const W = 640
+const H = 400
+const cx = W / 2
+const cy = H / 2
+
+// workers on an inner ellipse, evenly spread
+const wpos = new Map<string, { x: number; y: number }>()
+workers.forEach((w, i) => {
+  const a = (-90 + (i * 360) / workers.length) * (Math.PI / 180)
+  wpos.set(w, { x: cx + 175 * Math.cos(a), y: cy + 108 * Math.sin(a) })
+})
+
+// files: shared ones sink toward the center (the contested zone), private
+// ones sit outward past their only reader
+type Node = { label: string; x: number; y: number; deg: number; kind: 'worker' | 'file' }
+const files: Node[] = [...readers.entries()].map(([file, ws], i) => {
+  const pts = ws.map((w) => wpos.get(w)!)
+  const ax = pts.reduce((s, p) => s + p.x, 0) / pts.length
+  const ay = pts.reduce((s, p) => s + p.y, 0) / pts.length
+  if (ws.length > 1) {
+    // pull 40% toward center + deterministic spread so shared files don't stack
+    const jx = ((i * 53) % 90) - 45
+    const jy = ((i * 37) % 56) - 28
+    return { label: file, x: cx + (ax - cx) * 0.4 + jx, y: cy + (ay - cy) * 0.4 + jy, deg: ws.length, kind: 'file' as const }
+  }
+  const p = pts[0]
+  const t = ((i * 47) % 60) - 30 // tangential fan-out around the reader
+  return {
+    label: file,
+    x: cx + (p.x - cx) * 1.42 + t,
+    y: cy + (p.y - cy) * 1.5 + (((i * 31) % 40) - 20),
+    deg: 1,
+    kind: 'file' as const,
+  }
+})
+const wnodes: Node[] = workers.map((w) => {
+  const deg = [...readers.values()].filter((ws) => ws.includes(w)).length
+  const p = wpos.get(w)!
+  return { label: w, x: p.x, y: p.y, deg, kind: 'worker' as const }
+})
+const nodes = [...wnodes, ...files]
+const edges = [...readers.entries()].flatMap(([file, ws]) => {
+  const f = files.find((n) => n.label === file)!
+  return ws.map((w) => ({ from: wpos.get(w)!, to: f, shared: ws.length > 1 }))
+})
+
+// same radius law as the live studio: r = min(18, 4 + 2·√deg)
+const rOf = (deg: number) => Math.min(18, 4 + 2 * Math.sqrt(deg))
+const hubs = [...nodes].sort((a, b) => b.deg - a.deg).slice(0, 4)
+const topHub = files.reduce((m, n) => (n.deg > m.deg ? n : m), files[0])
+const short = (s: string, n = 15) => (s.length > n ? `${s.slice(0, n - 1)}…` : s)
+---
+
+<div class="relative aspect-8/5 min-h-56 w-full overflow-hidden">
+  <p class="sr-only">
+    the studio's graph page, recreated from the recorded run: {workers.length} workers and the{' '}
+    {files.length} files they read — {topHub.label} sits where {topHub.deg} workers converged
+  </p>
+      <svg
+        viewBox={`0 0 ${W} ${H}`}
+        preserveAspectRatio="xMidYMid slice"
+        class="absolute inset-0 h-full w-full"
+        role="img"
+        aria-label={`force graph of the recorded run: workers and the files they read, ${edges.length} edges over ${nodes.length} nodes`}
+      >
+        <g stroke="oklch(1 0 0 / 0.11)" stroke-width="1">
+          {edges.map((e) => (
+            <line x1={e.from.x} y1={e.from.y} x2={e.to.x} y2={e.to.y} />
+          ))}
+        </g>
+        {/* contested edges carry a slow dash flow — reads converging live */}
+        <g class="st-flow" stroke-width="1.2" fill="none">
+          {edges.filter((e) => e.shared).map((e) => (
+            <line x1={e.from.x} y1={e.from.y} x2={e.to.x} y2={e.to.y} />
+          ))}
+        </g>
+        {/* the hub pings — the sentry saw every worker converge here */}
+        <circle class="st-ping" cx={topHub.x} cy={topHub.y} r={rOf(topHub.deg) + 10} fill="none" stroke="var(--primary)" stroke-width="1" />
+        {nodes.map((n, i) => (
+          <g class="st-float" style={`--fd:${(i % 6) * 0.55}s; --fdd:${4.6 + (i % 4) * 0.9}s`}>
+            <circle cx={n.x} cy={n.y} r={rOf(n.deg)} fill="var(--primary)" opacity={n.deg > 1 ? 0.9 : 0.5} />
+            {(n.kind === 'worker' || n.deg > 1) && (
+              <text
+                x={n.x}
+                y={n.y - rOf(n.deg) - 5}
+                text-anchor="middle"
+                font-size="9.5"
+                fill="var(--muted-foreground)"
+                font-family="var(--font-mono)"
+              >
+                {short(n.label)}
+              </text>
+            )}
+          </g>
+        ))}
+      </svg>
+
+      <div class="st-float-card absolute top-2.5 left-2.5 rounded-lg px-3 py-2" aria-hidden="true">
+        <p class="text-[13px] font-semibold">knowledge graph</p>
+        <p class="text-[10.5px] text-(--muted-foreground)">showing {edges.length} edges · {nodes.length} nodes — read-edges from this run</p>
+      </div>
+
+      <div class="st-float-card absolute top-2.5 right-2.5 hidden w-44 rounded-lg px-3 py-2 sm:block">
+        <p class="text-[11px] font-semibold">top hubs <span class="font-normal text-(--muted-foreground)">most-connected</span></p>
+        <ol class="mt-1 space-y-0.5">
+          {hubs.map((h, i) => (
+            <li class="flex items-center gap-1.5 font-mono text-[10.5px]">
+              <span class="w-2.5 text-right text-(--muted-foreground)">{i + 1}</span>
+              <span class="min-w-0 flex-1 truncate">{h.label}</span>
+              <span class="rounded bg-(--secondary) px-1 text-[9.5px] text-(--muted-foreground)">deg {h.deg}</span>
+            </li>
+          ))}
+        </ol>
+      </div>
+
+      <div class="st-float-card absolute bottom-2.5 left-2.5 flex overflow-hidden rounded-lg font-mono text-[11px] text-(--muted-foreground)" aria-hidden="true">
+        <span class="px-2.5 py-1">+</span>
+        <span class="border-x border-(--border) px-2.5 py-1">−</span>
+        <span class="px-2.5 py-1">reset</span>
+      </div>
+</div>
+
+<style>
+  .st-float-card {
+    border: 1px solid var(--border);
+    background: color-mix(in oklab, var(--card) 72%, transparent);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+  }
+  .st-flow {
+    stroke: color-mix(in oklab, var(--primary) 50%, transparent);
+    stroke-dasharray: 3 9;
+    animation: st-dash 2.8s linear infinite;
+  }
+  @keyframes st-dash {
+    to { stroke-dashoffset: -12; }
+  }
+  .st-float {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: st-drift var(--fdd, 6s) ease-in-out var(--fd, 0s) infinite alternate;
+  }
+  @keyframes st-drift {
+    from { transform: translateY(-2.5px); }
+    to { transform: translateY(2.5px); }
+  }
+  .st-ping {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: st-ping 3.4s ease-out infinite;
+  }
+  @keyframes st-ping {
+    0% { transform: scale(0.45); opacity: 0.7; }
+    75%, 100% { transform: scale(1.5); opacity: 0; }
+  }
+</style>
