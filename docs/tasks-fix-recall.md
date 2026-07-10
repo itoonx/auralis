@@ -26,6 +26,19 @@
 >    question. **Production expansion needs a live LLM (deferred, same credit block as the reader).** Note:
 >    semantic-embedder upside stays small — misses are lexical-counting, not paraphrase → BGE-M3 stays parked.
 > 5. **Merge `fix-recall` → main** DONE. Controlled baseline (R1) still blocked on paid LLM / credit.
+> 6. ~~**R4 regression mitigation**~~ ✅ **FIXED (2026-07-10): union, not replace.** The proposed "gate expansion
+>    to counting/multi-session types" was **REFUTED** — the loser (dd2973ad) and all 4 winners are the SAME
+>    `multi-session` type, and a counting-pattern gate would trade **6 doc-coverage wins for 2 losses**
+>    (net-negative; verify-reality caught it pre-build). Real mechanism, ground-truthed against the two bench
+>    runs at DOC granularity (session-`some` over-counted — the entity lane kept a non-answer chunk so
+>    session-coverage stayed 2/2 and hid it): feeding `question + terms` as ONE query REPLACED the ranking and
+>    EVICTED a has_answer chunk the raw query already had — dd2973ad gold-doc BASE 2/2 → replace 1/2 → reader
+>    said "I don't know" (baseline had answered "2 AM" correctly). Fix: run raw + expanded separately and
+>    UNION (raw-48 base always kept, expansion-only docs appended, reader cap 48→96) → expansion can only ADD
+>    evidence. Verified on the REAL edited harness (`LME_DUMP`, all 90): dd2973ad chunkHit/evidAll/goldStrShown
+>    all TRUE (recovered); aggregate **evidAllDeep 82/90 ≥ replace 80 ≥ baseline 73** (monotonic, no
+>    regression). Reader QA re-run (predicted ~85/90) PENDING — costs the Claude Code CLI reader.
+>    File: `src/run-longmemeval.ts`.
 
 Companion to `prd-fix-recall.md` (the why). This is the what/who — each task has a deliverable, the files it
 OWNS (so parallel workers don't clash), what it depends on, and its acceptance gate.

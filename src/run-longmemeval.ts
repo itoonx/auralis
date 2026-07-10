@@ -173,8 +173,21 @@ async function runOne(oracle: OracleAdapter, q: Q): Promise<{ id: string; type: 
   const seen = new Map<string, (typeof hits0)[number]>();
   // M2 adjacency expansion: top hits carry their insertion-order neighbours — the answer to
   // "what came after X" sits in the chunk NEXT to the one that matches the question's words.
-  const retrievalQuery = EXPANSIONS[q.question_id] ? `${q.question} ${EXPANSIONS[q.question_id]}` : q.question;
-  const hits0 = await oracle.search(retrievalQuery, { project, limit: 48, expand: EXPAND });
+  // R4 query expansion — UNION, never replace. A counting question ("how many model kits") shares no words
+  // with the memories that answer it; blind instance-vocabulary (LME_EXPAND_FILE) recovers them. But feeding
+  // `question + terms` as ONE query REPLACES the ranking — ground-truthed against the bench runs, that EVICTED
+  // a has_answer chunk the raw query already had (dd2973ad gold-DOC 2/2 → 1/2 → reader "I don't know"; the
+  // session survived via the entity lane, so this only shows at doc granularity, not session). Gating
+  // expansion by question type was refuted (loser + all winners are the same multi-session type). So run BOTH
+  // and union: raw top-48 is the base (its gold coverage preserved by construction), expansion-only docs are
+  // appended after — expansion can then only ADD evidence, never evict it.
+  const hits0 = await oracle.search(q.question, { project, limit: 48, expand: EXPAND });
+  const expandTerms = EXPANSIONS[q.question_id];
+  if (expandTerms) {
+    const have = new Set(hits0.map((h) => h.id));
+    for (const h of await oracle.search(`${q.question} ${expandTerms}`, { project, limit: 48, expand: EXPAND }))
+      if (!have.has(h.id)) { have.add(h.id); hits0.push(h); }
+  }
   for (const h of hits0.slice(0, 12)) seen.set(h.id, h);
   for (const ent of extractEntities(q.question).slice(0, 3)) {
     for (const h of await oracle.search(ent, { project, limit: 4 })) if (!seen.has(h.id)) seen.set(h.id, h);
@@ -186,7 +199,10 @@ async function runOne(oracle: OracleAdapter, q: Q): Promise<{ id: string; type: 
   // top-48 (still ≥10× compression of the corpus) — evidALL rises to its pool ceiling (71%) by construction.
   // ponytail: remaining coverage loss is a QUERY gap (evidence outside top-48) → R4 query expansion.
   for (const h of hits0.slice(12)) if (!seen.has(h.id)) seen.set(h.id, h);
-  const hits = [...seen.values()].slice(0, 48);
+  // Expansion is additive → let the reader see raw-48 + the expansion-only extras (the recovered gold can
+  // sit anywhere in expansion's own top-48). Raw's 48 are inserted first, so they always survive the cap;
+  // the reader tolerates breadth (full-context feeds the ENTIRE haystack and still scores 60–64).
+  const hits = [...seen.values()].slice(0, expandTerms ? 96 : 48);
   if (!hits.length) return { id: q.question_id, type: q.question_type, hypothesis: "I don't know.", ingested, trace: { hits: [], excerpts: "" } };
   // Rank-aware excerpts: the top hits carry the evidence — give them room (chunked memories fit whole);
   // the tail is context, a teaser is enough. Neighbour chunks (M2) render indented under their hit,
