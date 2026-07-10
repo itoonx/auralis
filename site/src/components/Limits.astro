@@ -1,38 +1,148 @@
 ---
 import Section from './Section.astro'
 
-const limits = [
-  'the live numbers are n=1 directional — each headline figure is one non-deterministic run. pnpm bench reproduces any of them as mean ± spread; 50 deterministic tests in CI pin the mechanisms, not the magnitudes.',
-  'build mode is proven small, not scaled — clean decompositions, disjoint files, a handful of runs. overlapping-edit merges are still ahead.',
-  'v1 execution is confinement, not a true sandbox.',
-  'recall used to score 53.4% — below full-context. the instrument was broken (84% of losses were retrieval, not the reader). we fixed the instrument and re-ran the controlled baseline: memory 93.3% > full-context 90.0% > grep 60.0%, at 12.9× fewer tokens. the old number stays in the docs because pretending it never happened would defeat the point of this page.',
+// the register here is an issue tracker: we file limits against ourselves —
+// id, area, status — because "honest limits" is a claim too, and claims on
+// this page come with receipts. every body sentence is lifted from docs/,
+// not written for the landing page.
+type Limit = {
+  id: string
+  area: string
+  status: 'open' | 'resolved'
+  title: string
+  body: string
+  proof?: { before: string; after: string; note: string }
+}
+
+const limits: Limit[] = [
+  {
+    id: 'LIM-01',
+    area: 'evidence',
+    status: 'open',
+    title: 'the live numbers are n=1 directional',
+    body: 'each headline figure is one non-deterministic run. pnpm bench reproduces any of them as mean ± spread; 50 deterministic tests in CI pin the mechanisms, not the magnitudes.',
+  },
+  {
+    id: 'LIM-02',
+    area: 'build mode',
+    status: 'open',
+    title: 'proven small, not scaled',
+    body: 'clean decompositions, disjoint files, a handful of runs. overlapping-edit merges to a shared file are still ahead.',
+  },
+  {
+    id: 'LIM-03',
+    area: 'execution',
+    status: 'open',
+    title: 'v1 execution is confinement, not a true sandbox',
+    body: 'writes must resolve inside the workspace and escapes are denied — but a container/vm sandbox is the real answer, and it sits on the roadmap.',
+  },
+  {
+    id: 'LIM-04',
+    area: 'recall',
+    status: 'resolved',
+    title: 'recall scored 53.4% — below full-context',
+    body: 'the instrument was broken: 84% of losses were retrieval, not the reader. we fixed the instrument and re-ran the controlled baseline. the old number stays in the docs — pretending it never happened would defeat the point of this page.',
+    proof: { before: '53.4%', after: '93.3%', note: 'memory 93.3% > full-context 90.0% > grep 60.0% · 12.9× fewer tokens' },
+  },
 ]
 
 const roadmap = [
-  'model/turn routing — timing says it’s the biggest lever',
-  'overlapping-edit merges in build mode',
-  'cross-machine fleets · heterogeneous runtimes',
+  { title: 'model / turn routing', note: 'timing says it’s the biggest lever: cheap models for easy subtasks, the strong one reserved for hard analysis.' },
+  { title: 'overlapping-edit merges in build mode', note: 'worktrees + clean merges, or a finer-grained claim than whole-file.' },
+  { title: 'cross-machine fleets · heterogeneous runtimes', note: 'claim leases + drop-in runners — they already share one brain.' },
 ]
+
+const open = limits.filter((l) => l.status === 'open').length
+const resolved = limits.length - open
 ---
 
 <Section id="limits" title="honest limits & roadmap">
-  <ul class="flex max-w-3xl flex-col gap-4">
-    {limits.map((l) => (
-      <li class="flex gap-3 text-sm text-lp-muted">
-        <span class="text-lp-fg" aria-hidden="true">⚠</span>
-        <span class="text-pretty">{l}</span>
-      </li>
-    ))}
-  </ul>
-  <ul class="mt-8 flex max-w-3xl flex-col gap-2">
-    {roadmap.map((r) => (
-      <li class="flex gap-3 font-mono text-xs text-lp-muted">
-        <span aria-hidden="true">↻</span>
-        <span>{r}</span>
-      </li>
-    ))}
-  </ul>
-  <a
-    class="mt-6 inline-block font-mono text-xs text-lp-muted underline underline-offset-4 hover:text-lp-fg"
-    href="https://github.com/itoonx/Auralis/blob/main/docs/roadmap.md">docs/roadmap.md →</a>
+  <p class="lm-intro -mt-4 mb-10 max-w-2xl text-pretty text-lp-muted">
+    a proof page that hides its boundaries isn't proof. these are ours — filed like bugs, status
+    included, because that's what they are.
+  </p>
+
+  <div class="grid gap-12 lg:grid-cols-[minmax(0,1fr)_minmax(260px,320px)] lg:gap-16">
+    <!-- the ledger -->
+    <div>
+      <div class="flex items-baseline gap-3 font-mono text-xs text-lp-muted">
+        <span class="tracking-widest">limits we file against ourselves</span>
+        <span class="ml-auto whitespace-nowrap">{open} open · {resolved} resolved</span>
+      </div>
+      <ul class="mt-5 flex flex-col gap-4">
+        {limits.map((l) => (
+          <li class="lm-card rounded-2xl border border-lp-border bg-lp-surface p-5 transition-colors hover:border-lp-muted/40">
+            <div class="flex items-center gap-3 font-mono text-xs text-lp-muted">
+              <span>{l.id}</span>
+              <span class="opacity-50" aria-hidden="true">·</span>
+              <span>{l.area}</span>
+              {l.status === 'open' ? (
+                <span class="ml-auto inline-flex items-center gap-1.5 rounded-full border border-(--lp-warn)/30 px-2.5 py-0.5 text-(--lp-warn)">
+                  <span class="lm-dot h-1.5 w-1.5 rounded-full bg-(--lp-warn)" aria-hidden="true"></span>open
+                </span>
+              ) : (
+                <span class="ml-auto inline-flex items-center gap-1.5 rounded-full border border-lp-accent/30 px-2.5 py-0.5 text-lp-accent">
+                  <span aria-hidden="true">✓</span>resolved
+                </span>
+              )}
+            </div>
+            <h3 class="mt-3 font-mono text-sm text-lp-fg">▸ {l.title}</h3>
+            <p class="mt-2 text-sm text-pretty text-lp-muted">{l.body}</p>
+            {l.proof && (
+              <p class="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-lp-border bg-lp-surface-2/60 px-3 py-2 font-mono text-xs">
+                <span class="text-lp-muted line-through opacity-60"><span class="sr-only">was </span>{l.proof.before}</span>
+                <span class="text-lp-muted" aria-hidden="true">→</span>
+                <span class="text-lp-accent"><span class="sr-only">now </span>{l.proof.after}</span>
+                <span class="text-lp-muted">{l.proof.note}</span>
+              </p>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
+
+    <!-- the queue -->
+    <aside class="rm-rail">
+      <h3 class="flex items-center gap-3 font-mono text-xs tracking-widest text-lp-muted">
+        <span class="h-px w-6 bg-lp-accent" aria-hidden="true"></span>
+        next up · ordered by leverage
+      </h3>
+      <ol class="mt-6 flex flex-col gap-7 border-l border-lp-border pl-6">
+        {roadmap.map((r, i) => (
+          <li class="relative">
+            <span
+              class:list={[
+                'absolute -left-[29px] top-1 h-2.5 w-2.5 rounded-full',
+                i === 0 ? 'rm-next bg-lp-accent' : 'border border-lp-muted/60 bg-lp-bg',
+              ]}
+              aria-hidden="true"></span>
+            <span class="font-mono text-xs text-lp-muted">{String(i + 1).padStart(2, '0')}</span>
+            <p class="mt-1 font-mono text-sm text-lp-fg">{r.title}</p>
+            <p class="mt-1.5 text-xs text-pretty leading-relaxed text-lp-muted">{r.note}</p>
+          </li>
+        ))}
+      </ol>
+      <a
+        class="mt-8 inline-block font-mono text-xs text-lp-muted underline underline-offset-4 hover:text-lp-fg"
+        href="https://github.com/itoonx/Auralis/blob/main/docs/roadmap.md">the full roadmap → docs/roadmap.md</a>
+    </aside>
+  </div>
 </Section>
+
+<style>
+  /* decoration only — the global reduced-motion kill flattens both */
+  .lm-dot {
+    animation: lm-blink 2.6s ease-in-out infinite;
+  }
+  @keyframes lm-blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.35; }
+  }
+  .rm-next {
+    animation: rm-pulse 2.6s ease-in-out infinite;
+  }
+  @keyframes rm-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--lp-accent) 35%, transparent); }
+    50% { box-shadow: 0 0 0 7px color-mix(in oklab, var(--lp-accent) 0%, transparent); }
+  }
+</style>
