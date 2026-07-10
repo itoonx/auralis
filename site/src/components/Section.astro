@@ -1,16 +1,25 @@
 ---
+import SectionBadge from './SectionBadge.astro'
+import { sectionLabel } from '../lib/sections'
+
 interface Props {
   id: string
   title?: string
 }
 const { id, title } = Astro.props
+const badge = sectionLabel(id)
 ---
 
 <!-- /85 veil (not solid): the fixed hero field floats behind every section,
      peeking through like the reference's bg-paper/80 panels -->
 <section id={id} class="border-t border-lp-border bg-lp-bg/85">
   <div class="mx-auto max-w-6xl px-6 py-20 md:py-28">
-    {title && <h2 class="mb-10 font-serif text-4xl font-medium lowercase tracking-tight text-lp-fg md:text-5xl">{title}</h2>}
+    {title && (
+      <div class="mb-10">
+        {badge && <SectionBadge label={badge} />}
+        <h2 class="mt-3 font-serif text-4xl font-medium lowercase tracking-tight text-lp-fg md:text-5xl">{title}</h2>
+      </div>
+    )}
     <slot />
   </div>
 </section>

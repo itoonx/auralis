@@ -1,8 +1,10 @@
 ---
 import Logo from './Logo.astro'
+import { MENU } from '../lib/sections'
 
 // install (the primary action) leads; proof always shows; architecture is the
-// one that folds away below sm: on a narrow phone. github is an icon at the end.
+// one that folds away below sm: on a narrow phone. "more" opens the full
+// section index; github is an icon at the end.
 const links: Array<[string, string, boolean?]> = [
   ['install', '#install'],
   ['proof', '#proof'],
@@ -29,6 +31,27 @@ const gh = 'https://github.com/itoonx/Auralis'
           ]}
           href={href}>{label}</a>
       ))}
+
+      {/* the full section index — a native <details> so it works with no JS;
+          a small script closes it on outside-click / Escape / choosing one */}
+      <details class="lp-more relative">
+        <summary class="lp-more-btn flex cursor-pointer list-none items-center gap-1 underline-offset-4 hover:text-lp-fg">
+          more
+          <svg class="lp-more-chev size-3 transition-transform" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+        </summary>
+        <div class="absolute right-0 top-full z-20 mt-2 w-48 rounded-xl border border-lp-border bg-lp-surface/95 p-1.5 shadow-[0_16px_48px_-16px_rgb(0_0_0/0.8)] backdrop-blur-xl">
+          <ul class="grid gap-0.5">
+            {MENU.map((s) => (
+              <li>
+                <a
+                  href={`#${s.id}`}
+                  class="block rounded-lg px-2.5 py-1.5 text-xs text-lp-muted transition-colors hover:bg-lp-fg/8 hover:text-lp-fg">{s.label}</a>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </details>
+
       <a
         href={gh}
         class="text-lp-muted transition-colors hover:text-lp-fg"
@@ -41,3 +64,30 @@ const gh = 'https://github.com/itoonx/Auralis'
     </div>
   </div>
 </nav>
+
+<style>
+  /* hide the native disclosure triangle; the chevron flips when open */
+  .lp-more > summary::-webkit-details-marker { display: none; }
+  .lp-more[open] .lp-more-chev { transform: rotate(180deg); }
+  .lp-more > summary:focus-visible {
+    outline: 2px solid var(--lp-accent);
+    outline-offset: 3px;
+    border-radius: 4px;
+  }
+</style>
+
+<script>
+  // the "more" section index closes when you pick a destination, click away,
+  // or hit Escape — everything else (smooth scroll + #hash) is the shared
+  // a[href^="#"] handler in Motion.astro
+  const more = document.querySelector<HTMLDetailsElement>('details.lp-more')
+  if (more) {
+    more.querySelectorAll('a').forEach((a) => a.addEventListener('click', () => (more.open = false)))
+    document.addEventListener('click', (e) => {
+      if (more.open && e.target instanceof Node && !more.contains(e.target)) more.open = false
+    })
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') more.open = false
+    })
+  }
+</script>

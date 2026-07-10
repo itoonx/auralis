@@ -1,0 +1,19 @@
+---
+// The wayfinding chip above a section header — a proof-green pill whose label
+// matches the section's entry in the nav "more" menu, so the reader can map
+// where they are to the navigation. Lowercase mono with a lead dot (the
+// studio's chip vocabulary), not a generic uppercase eyebrow.
+interface Props {
+  label: string
+  class?: string
+}
+const { label, class: cls = '' } = Astro.props
+---
+
+<span
+  class:list={[
+    'inline-flex items-center gap-1.5 rounded-full border border-lp-accent/25 bg-lp-accent/10 px-2.5 py-1 font-mono text-[11px] tracking-wide text-lp-accent',
+    cls,
+  ]}>
+  <span class="size-1 rounded-full bg-lp-accent"></span>{label}
+</span>
