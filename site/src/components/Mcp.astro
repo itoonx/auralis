@@ -1,64 +1,194 @@
 ---
 import Section from './Section.astro'
 
-const snippet = `{ "mcpServers": { "auralis": {
-    "command": "pnpm", "args": ["-C", "/path/to/auralis", "mcp"] } } }`
+const snippet = `{
+  "mcpServers": {
+    "auralis": {
+      "command": "pnpm",
+      "args": ["-C", "/path/to/auralis", "mcp"]
+    }
+  }
+}`
 
+// the ingress — every session event classified at write time, deterministically.
+// the lane drives the color: knowledge earns recall, timeline is pure
+// observability, dropped never touches the brain.
 const ingress = [
-  ['substantive prompt (≥80 chars)', 'knowledge (learn)', '1.0 (human)', 'unpinned — fades if never used'],
-  ['trivial prompt / slash / !shell', 'timeline only / dropped', '—', 'never pollutes recall'],
-  ['assistant conclusion (≥120 chars)', 'knowledge (learn)', '0.5 (agent)', 'credibility earned via cite'],
-  ['Write / Edit', 'timeline trace only', '—', 'observability, never knowledge'],
-  ['commits, reads, other tools', 'dropped', '—', 'git already records them'],
-]
+  { event: 'substantive prompt (≥80 chars)', lane: 'knowledge', trust: '1.0 · human', fate: 'unpinned — fades if never used' },
+  { event: 'assistant conclusion (≥120 chars)', lane: 'knowledge', trust: '0.5 · agent', fate: 'credibility earned via cite' },
+  { event: 'Write / Edit', lane: 'timeline', trust: '—', fate: 'observability, never knowledge' },
+  { event: 'trivial prompt · slash · !shell', lane: 'dropped', trust: '—', fate: 'never pollutes recall' },
+  { event: 'commits · reads · other tools', lane: 'dropped', trust: '—', fate: 'git already records them' },
+] as const
+
+const lane: Record<string, string> = {
+  knowledge: 'border-lp-accent/30 bg-lp-accent/10 text-lp-accent',
+  timeline: 'border-lp-border bg-lp-surface-2 text-lp-fg',
+  dropped: 'border-lp-border/60 text-lp-muted',
+}
 ---
 
 <Section id="mcp" title="claude code + mcp — session memory, both ways">
-  <div class="grid gap-10 lg:grid-cols-[1fr_1.2fr]">
-    <div class="flex min-w-0 flex-col gap-4 text-pretty text-sm text-lp-muted">
-      <!-- keep the <span>s and their neighbouring words on one line, spaces on
-           both sides — the minifier eats newline-only gaps next to tags and
-           glues the words together -->
-      <p>
-        add one block to <span class="font-mono text-lp-fg">.mcp.json</span> and your session gets <span class="font-mono text-lp-fg">analyze</span> and <span class="font-mono text-lp-fg">build</span> tools
-        — Claude calling auralis calling
-        Claude, proven live (analyze answered in 49s; progress notifications keep long builds alive).
-      </p>
-      <p>
-        then the part a standalone memory plugin can't do: what you tell Claude Code becomes
-        recallable by fleet workers, and what the fleet learns surfaces back in your prompts —
-        bidirectional, on one replayable timeline.
-      </p>
-      <pre class="overflow-x-auto rounded-md border border-lp-border bg-lp-surface p-4 font-mono text-xs leading-6 text-lp-fg"><code>{snippet}</code></pre>
-      <p class="font-mono text-xs">
+  <p class="mb-10 max-w-2xl text-pretty text-lp-muted">
+    add one block to <span class="font-mono text-lp-fg">.mcp.json</span> and your session gets <span class="font-mono text-lp-fg">analyze</span> and <span class="font-mono text-lp-fg">build</span> tools
+    — Claude calling auralis calling Claude. then the part a standalone memory plugin can't do: what
+    you tell Claude Code becomes recallable by fleet workers, and what the fleet learns surfaces back
+    in your prompts.
+  </p>
+
+  <div class="grid gap-6 lg:grid-cols-2">
+    <!-- the bridge — memory flows both ways across one brain. decoration only
+         (aria-hidden); the caption carries the claim. -->
+    <figure class="flex flex-col rounded-2xl border border-lp-border bg-lp-surface p-6">
+      <div class="flex-1 text-lp-muted" aria-hidden="true">
+        <svg viewBox="0 0 400 190" class="w-full" fill="none" stroke-linecap="round">
+          <!-- lane labels -->
+          <text x="200" y="30" text-anchor="middle" font-size="10" fill="currentColor" opacity=".55" font-family="var(--font-mono)">what you tell Claude →</text>
+          <text x="200" y="176" text-anchor="middle" font-size="10" fill="currentColor" opacity=".55" font-family="var(--font-mono)">← what the fleet learns</text>
+
+          <!-- the three nodes: you · brain · fleet -->
+          <circle cx="58" cy="95" r="15" stroke="currentColor" stroke-width="1.4" opacity=".7" />
+          <circle cx="58" cy="95" r="4" fill="currentColor" class="text-lp-fg" opacity=".85" />
+          <text x="58" y="132" text-anchor="middle" font-size="10" fill="currentColor" opacity=".7" font-family="var(--font-mono)">you</text>
+          <text x="58" y="145" text-anchor="middle" font-size="8" fill="currentColor" opacity=".45" font-family="var(--font-mono)">claude code</text>
+
+          <circle class="mcp-ring" cx="200" cy="95" r="24" stroke="currentColor" stroke-width="1" />
+          <circle cx="200" cy="95" r="24" stroke="currentColor" stroke-width="1" opacity=".3" />
+          <circle cx="200" cy="95" r="15" stroke="currentColor" stroke-width="1.5" class="text-lp-accent" opacity=".55" />
+          <circle cx="200" cy="95" r="6" fill="currentColor" class="text-lp-accent" />
+          <text x="200" y="140" text-anchor="middle" font-size="10" fill="currentColor" opacity=".7" font-family="var(--font-mono)">one brain</text>
+
+          <circle cx="342" cy="95" r="15" stroke="currentColor" stroke-width="1.4" opacity=".7" />
+          <circle cx="336" cy="90" r="2.4" fill="currentColor" class="text-lp-fg" opacity=".8" />
+          <circle cx="348" cy="90" r="2.4" fill="currentColor" class="text-lp-fg" opacity=".8" />
+          <circle cx="342" cy="101" r="2.4" fill="currentColor" class="text-lp-fg" opacity=".8" />
+          <text x="342" y="132" text-anchor="middle" font-size="10" fill="currentColor" opacity=".7" font-family="var(--font-mono)">fleet</text>
+          <text x="342" y="145" text-anchor="middle" font-size="8" fill="currentColor" opacity=".45" font-family="var(--font-mono)">workers</text>
+
+          <!-- lanes -->
+          <path d="M76 82 H 324" stroke="currentColor" stroke-width="1" opacity=".18" />
+          <path d="M324 108 H 76" stroke="currentColor" stroke-width="1" opacity=".18" />
+
+          <!-- flow: you → brain → fleet (learn) and back (recall) -->
+          <circle class="mcp-flow text-lp-fg" r="3" fill="currentColor" style="offset-path:path('M76 82 H 324')" />
+          <circle class="mcp-flow mcp-flow-2 text-lp-fg" r="3" fill="currentColor" style="offset-path:path('M76 82 H 324')" />
+          <circle class="mcp-flow text-lp-accent" r="3" fill="currentColor" style="offset-path:path('M324 108 H 76')" />
+          <circle class="mcp-flow mcp-flow-2 text-lp-accent" r="3" fill="currentColor" style="offset-path:path('M324 108 H 76')" />
+        </svg>
+      </div>
+      <figcaption class="mt-2 border-t border-lp-border pt-3 font-mono text-xs text-lp-muted">
+        bidirectional, on one replayable timeline — not a one-way plugin
+      </figcaption>
+    </figure>
+
+    <!-- the config — a terminal card that copies with an icon (no text swap) -->
+    <figure class="flex flex-col overflow-hidden rounded-2xl border border-lp-border bg-lp-surface">
+      <figcaption class="flex items-center gap-2 border-b border-lp-border bg-lp-surface-2/80 px-4 py-2.5 font-mono text-xs text-lp-muted">
+        <span class="flex gap-1.5" aria-hidden="true">
+          <span class="size-2.5 rounded-full bg-(--lp-danger)"></span>
+          <span class="size-2.5 rounded-full bg-(--lp-warn)"></span>
+          <span class="size-2.5 rounded-full bg-lp-accent"></span>
+        </span>
+        <span class="ml-1">.mcp.json</span>
+        <button
+          id="mcp-copy"
+          type="button"
+          data-cmd={snippet}
+          class="ml-auto inline-flex cursor-pointer items-center gap-1.5 rounded border border-lp-border px-2 py-1 text-lp-muted transition-colors hover:border-lp-muted hover:text-lp-fg"
+          title="copy to clipboard">
+          <span class="relative inline-flex size-3.5" aria-hidden="true">
+            <svg id="mcp-copy-i" class="absolute inset-0 size-3.5 transition-opacity" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2" /><path d="M5 15V5a2 2 0 0 1 2-2h10" /></svg>
+            <svg id="mcp-check-i" class="absolute inset-0 size-3.5 text-lp-accent opacity-0 transition-opacity" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
+          </span>
+          copy
+          <span id="mcp-copy-status" class="sr-only" aria-live="polite"></span>
+        </button>
+      </figcaption>
+      <pre class="flex-1 overflow-x-auto p-4 font-mono text-xs leading-6 text-lp-fg"><code>{snippet}</code></pre>
+      <p class="border-t border-lp-border px-4 py-3 font-mono text-xs text-lp-muted">
         no LLM in the write path · searchable the same instant · fail-silent if the brain is down
       </p>
+    </figure>
+  </div>
+
+  <!-- the ingress — the deterministic write-time classifier, one row per event
+       kind, colored by the lane it lands in -->
+  <div class="mt-10">
+    <div class="mb-4 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+      <h3 class="font-mono text-sm text-lp-fg">the ingress</h3>
+      <p class="text-xs text-lp-muted">every session event classified at write time, deterministically — no LLM decides what's remembered</p>
     </div>
 
-    <div class="min-w-0 overflow-x-auto rounded-md border border-lp-border">
-      <table class="w-full min-w-[560px] border-collapse font-mono text-xs">
-        <caption class="border-b border-lp-border bg-lp-surface px-4 py-2 text-left text-lp-muted">
-          the ingress — every session event classified at write time, deterministically
-        </caption>
-        <thead>
-          <tr class="border-b border-lp-border text-left text-lp-muted">
-            <th class="px-3 py-2 font-normal" scope="col">session event</th>
-            <th class="px-3 py-2 font-normal" scope="col">lane</th>
-            <th class="px-3 py-2 font-normal" scope="col">trust</th>
-            <th class="px-3 py-2 font-normal" scope="col">fate</th>
-          </tr>
-        </thead>
-        <tbody class="text-lp-muted">
-          {ingress.map((r) => (
-            <tr class="border-b border-lp-border last:border-b-0">
-              <td class="px-3 py-2 text-lp-fg">{r[0]}</td>
-              <td class="px-3 py-2">{r[1]}</td>
-              <td class="px-3 py-2">{r[2]}</td>
-              <td class="px-3 py-2">{r[3]}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <!-- desktop: a tidy grid; phones: the same rows stack -->
+    <ul class="overflow-hidden rounded-2xl border border-lp-border">
+      <li class="hidden grid-cols-[1.4fr_auto_auto_1.6fr] gap-4 border-b border-lp-border bg-lp-surface-2/60 px-4 py-2 font-mono text-[11px] text-lp-muted sm:grid" aria-hidden="true">
+        <span>session event</span><span>lane</span><span>trust</span><span>fate</span>
+      </li>
+      {ingress.map((r) => (
+        <li class="grid grid-cols-1 gap-x-4 gap-y-1.5 border-b border-lp-border bg-lp-surface px-4 py-3 last:border-b-0 sm:grid-cols-[1.4fr_auto_auto_1.6fr] sm:items-center">
+          <span class="font-mono text-xs text-lp-fg">{r.event}</span>
+          <span>
+            <span class:list={['inline-flex rounded-full border px-2 py-0.5 font-mono text-[11px]', lane[r.lane]]}>{r.lane}</span>
+          </span>
+          <span class="font-mono text-[11px] text-lp-muted tabular-nums">{r.trust}</span>
+          <span class="text-xs text-lp-muted">{r.fate}</span>
+        </li>
+      ))}
+    </ul>
   </div>
 </Section>
+
+<style>
+  /* the bridge flow — dots ride each lane; the accent (recall) trails the
+     white (learn). base state = empty lanes (reduced-motion safe). */
+  .mcp-flow {
+    opacity: 0;
+    animation: mcp-flow 3.6s linear infinite;
+  }
+  .mcp-flow-2 {
+    animation-delay: 1.8s;
+  }
+  @keyframes mcp-flow {
+    0% { offset-distance: 0%; opacity: 0; }
+    8% { opacity: 0.95; }
+    82% { opacity: 0.95; }
+    100% { offset-distance: 100%; opacity: 0; }
+  }
+  .mcp-ring {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: mcp-ring 3.4s ease-out infinite;
+  }
+  @keyframes mcp-ring {
+    0% { transform: scale(0.5); opacity: 0.55; }
+    80%, 100% { transform: scale(1.15); opacity: 0; }
+  }
+</style>
+
+<script>
+  // config copy — the trailing icon swaps copy → check for 1.2s; the command
+  // text never changes. mirrors the hero CTA.
+  const btn = document.getElementById('mcp-copy') as HTMLButtonElement | null
+  const copyI = document.getElementById('mcp-copy-i')
+  const checkI = document.getElementById('mcp-check-i')
+  const status = document.getElementById('mcp-copy-status')
+  if (btn && copyI && checkI) {
+    let revert = 0
+    btn.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(btn.dataset.cmd!)
+        copyI.classList.add('opacity-0')
+        checkI.classList.remove('opacity-0')
+        if (status) status.textContent = 'copied to clipboard'
+        clearTimeout(revert)
+        revert = window.setTimeout(() => {
+          copyI.classList.remove('opacity-0')
+          checkI.classList.add('opacity-0')
+          if (status) status.textContent = ''
+        }, 1200)
+      } catch {
+        /* clipboard unavailable — the block is selectable text either way */
+      }
+    })
+  }
+</script>
