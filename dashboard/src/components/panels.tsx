@@ -1,23 +1,21 @@
-// The analytical panels behind the dashboard tabs. Each fetches its own slice of the brain and refetches
-// on the shared `tick` the parent bumps while live. Kept in one file — they're small and always shipped together.
-import { useEffect, useState } from "react"
+// The analytical panels behind the dashboard tabs. Each fetches its own slice of the brain via usePoll
+// (stale-guarded) and refetches on the shared `tick` the parent bumps while live. Kept in one file —
+// they're small and always shipped together.
+import { useEffect, useMemo, useRef, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import {
-  getDecisions, getGraphAll, getRuns, getTiming, search,
-  type Decision, type GraphAllEdge, type RunSummary, type SearchResult, type Timing,
-} from "@/lib/api"
+import { getDecisions, getGraphAll, getRuns, getTiming, search, type GraphAllEdge, type SearchResult } from "@/lib/api"
+import { usePoll } from "@/lib/use-poll"
 import { ForceGraph } from "@/components/force-graph"
 
 const fmt = (ms: number) => (ms >= 1000 ? `${(ms / 1000).toFixed(1)}s` : `${ms.toFixed(ms < 10 ? 1 : 0)}ms`)
 
 // ── Timing: where wall-clock actually went. Bars relative to the biggest phase; the point is that the LLM dominates.
 export function TimingPanel({ tick }: { tick: number }) {
-  const [t, setT] = useState<Timing | null>(null)
-  useEffect(() => { getTiming().then(setT).catch(() => setT(null)) }, [tick])
+  const { data: t } = usePoll(getTiming, [tick])
   const top = t?.phases.reduce((m, p) => Math.max(m, p.total), 0) || 1
   return (
     <Card>
@@ -51,8 +49,8 @@ export function TimingPanel({ tick }: { tick: number }) {
 
 // ── Runs: history + per-run scorecard. Click a row to drive the timeline (compare by eyeballing the columns).
 export function RunsPanel({ project, tick, selected, onSelect }: { project: string; tick: number; selected: string; onSelect: (runId: string) => void }) {
-  const [runs, setRuns] = useState<RunSummary[]>([])
-  useEffect(() => { getRuns(project).then((d) => setRuns(d.runs)).catch(() => setRuns([])) }, [project, tick])
+  const { data } = usePoll(() => getRuns(project), [project, tick])
+  const runs = data?.runs ?? []
   return (
     <Card>
       <CardHeader className="pb-3"><CardTitle>Runs <span className="text-xs font-normal text-muted-foreground">click one to drive the timeline</span></CardTitle></CardHeader>
@@ -93,16 +91,19 @@ export function RunsPanel({ project, tick, selected, onSelect }: { project: stri
 // ── Graph: the whole knowledge graph as a force-directed view. Drag to pin, hover to spotlight a node's
 // neighborhood, click a node to list its edges below.
 export function GraphPanel({ project, tick }: { project: string; tick: number }) {
-  const [edges, setEdges] = useState<GraphAllEdge[]>([])
+  const { data } = usePoll(() => getGraphAll(project), [project, tick])
+  // Every poll returns a fresh array; keying the memo on content keeps the reference stable when the
+  // graph hasn't actually changed, so ForceGraph doesn't rebuild (and restart its simulation) each tick.
+  const edgesKey = JSON.stringify(data?.edges ?? [])
+  const edges = useMemo(() => JSON.parse(edgesKey) as GraphAllEdge[], [edgesKey])
   const [sel, setSel] = useState("")
-  useEffect(() => { getGraphAll(project).then((d) => setEdges(d.edges)).catch(() => setEdges([])) }, [project, tick])
   const nodeCount = new Set(edges.flatMap((e) => [e.subj_key, e.obj_key])).size
   const nbr = sel ? edges.filter((e) => e.subj_key === sel || e.obj_key === sel) : []
   return (
     <Card>
       <CardHeader className="pb-3">
         <CardTitle>Knowledge graph
-          <span className="text-xs font-normal text-muted-foreground"> {nodeCount} nodes · {edges.length} edges · drag / hover</span>
+          <span className="text-xs font-normal text-muted-foreground"> {nodeCount} nodes · {edges.length} edges · drag to pin · double-click to unpin</span>
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
@@ -131,8 +132,8 @@ export function GraphPanel({ project, tick }: { project: string; tick: number })
 // ── Decisions: the honest ADR log straight from the brain. Superseded ones are kept and flagged (reversed,
 // never deleted) — the values layer, visible.
 export function DecisionsPanel({ project, tick }: { project: string; tick: number }) {
-  const [decisions, setDecisions] = useState<Decision[]>([])
-  useEffect(() => { getDecisions(project).then((d) => setDecisions(d.decisions)).catch(() => setDecisions([])) }, [project, tick])
+  const { data } = usePoll(() => getDecisions(project), [project, tick])
+  const decisions = data?.decisions ?? []
   return (
     <Card>
       <CardHeader className="pb-3">
@@ -164,20 +165,37 @@ export function DecisionsPanel({ project, tick }: { project: string; tick: numbe
 export function SearchPanel({ project }: { project: string }) {
   const [q, setQ] = useState("")
   const [results, setResults] = useState<SearchResult[] | null>(null)
+  const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const req = useRef(0)
+  // Results are per-project — clear them (and invalidate any in-flight search) when the picker changes,
+  // so another project's hits never linger. Same request-id guard as usePoll; kept manual because search
+  // is user-triggered, not polled.
+  useEffect(() => { req.current++; setResults(null); setError(null); setBusy(false) }, [project])
   const run = async () => {
     if (!q.trim()) return
+    const id = ++req.current
     setBusy(true)
-    try { setResults((await search(q, project)).results) } catch { setResults([]) } finally { setBusy(false) }
+    setError(null)
+    try {
+      const r = await search(q, project)
+      if (id === req.current) setResults(r.results)
+    } catch (e) {
+      // A failed search is an error, not an empty brain — don't render it as "nothing found".
+      if (id === req.current) { setResults(null); setError((e as Error).message) }
+    } finally {
+      if (id === req.current) setBusy(false)
+    }
   }
   return (
     <Card>
       <CardHeader className="pb-3"><CardTitle>Search <span className="text-xs font-normal text-muted-foreground">semantic recall — what a worker sees</span></CardTitle></CardHeader>
       <CardContent className="space-y-3">
         <form onSubmit={(e) => { e.preventDefault(); run() }} className="flex gap-2">
-          <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="how do we authenticate users?" />
-          <Button type="submit" disabled={busy}>{busy ? "…" : "search"}</Button>
+          <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="how do we authenticate users?" className="max-sm:h-10" />
+          <Button type="submit" disabled={busy} className="max-sm:h-10">{busy ? "…" : "search"}</Button>
         </form>
+        {error && <p className="text-sm text-destructive">can't reach oracle-lite ({error}).</p>}
         <ul className="space-y-2">
           {results?.length === 0 && <li className="text-sm text-muted-foreground">nothing in the brain for that query.</li>}
           {results?.map((r) => (

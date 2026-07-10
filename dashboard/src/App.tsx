@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type ReactNode } from "react"
+import { useEffect, useState, type ReactNode } from "react"
 import { Activity, Database, GitBranch, Network, Pause, Play, RefreshCw } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -8,7 +8,8 @@ import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { DecisionsPanel, GraphPanel, RunsPanel, SearchPanel, TimingPanel } from "@/components/panels"
-import { getDocs, getProjects, getStats, getTimeline, scorecard, type Finding, type ProjectInfo, type Stats, type TimelineEvent } from "@/lib/api"
+import { getDocs, getProjects, getStats, getTimeline, scorecard } from "@/lib/api"
+import { usePoll } from "@/lib/use-poll"
 
 // Glyph + accent per event kind — mirrors the CLI reader so the timeline reads the same in both places.
 const KIND: Record<string, { glyph: string; cls: string }> = {
@@ -63,45 +64,35 @@ function Stat({ icon, label, value, sub }: { icon: ReactNode; label: string; val
 
 export default function App() {
   const [project, setProject] = useState("")
-  const [projects, setProjects] = useState<ProjectInfo[]>([])
   const [tick, setTick] = useState(0)
   const [runSel, setRunSel] = useState("") // "" = newest run for the project
-  const [events, setEvents] = useState<TimelineEvent[]>([])
-  const [runId, setRunId] = useState("")
-  const [stats, setStats] = useState<Stats | null>(null)
-  const [docs, setDocs] = useState<Finding[]>([])
-  const [error, setError] = useState<string | null>(null)
   const [live, setLive] = useState(true)
-  const [updatedAt, setUpdatedAt] = useState("")
   const [showTraces, setShowTraces] = useState(false)
 
   useEffect(() => { document.documentElement.classList.add("dark") }, [])
 
   // Discover which projects actually have data and default to the most-active one, so the dashboard isn't
   // blank on load (the old hardcoded "default" project is almost always empty). Refreshes with the live tick.
+  const pr = usePoll(getProjects, [tick])
+  const projects = pr.data?.projects ?? []
   useEffect(() => {
-    getProjects().then(({ projects }) => {
-      setProjects(projects)
-      setProject((p) => p || projects[0]?.project || "default")
-    }).catch(() => {})
-  }, [tick])
+    if (pr.data) setProject((p) => p || pr.data?.projects[0]?.project || "default")
+  }, [pr.data])
 
-  const load = useCallback(async () => {
-    if (!project) return // wait until the project picker has resolved (avoids a blank project= query)
-    try {
-      const [tl, st, dc] = await Promise.all([getTimeline(project, runSel || undefined), getStats(project), getDocs(project)])
-      setEvents(tl.events)
-      setRunId(tl.run ?? "")
-      setStats(st)
-      setDocs(dc.docs)
-      setError(null)
-      setUpdatedAt(new Date().toLocaleTimeString())
-    } catch (e) {
-      setError((e as Error).message)
-    }
-  }, [project, runSel])
+  // The main slice — disabled (null fetcher) until the project picker has resolved.
+  const main = usePoll(
+    project ? () => Promise.all([getTimeline(project, runSel || undefined), getStats(project), getDocs(project)]) : null,
+    [project, runSel, tick],
+  )
+  const [tl, stats, dc] = main.data ?? [null, null, null]
+  const events = tl?.events ?? []
+  const runId = tl?.run ?? ""
+  const docs = dc?.docs ?? []
+  const updatedAt = main.at
+  // Either failing fetch means the brain is unreachable — surface it (a dead oracle used to render a
+  // silently blank dashboard, because the main load never ran without a resolved project).
+  const error = pr.error ?? main.error
 
-  useEffect(() => { load() }, [load, tick])
   useEffect(() => {
     if (!live) return
     const id = setInterval(() => setTick((t) => t + 1), 3000)
@@ -119,8 +110,10 @@ export default function App() {
   return (
     <div className="min-h-svh bg-background text-foreground">
       <header className="border-b sticky top-0 z-10 bg-background/80 backdrop-blur">
-        <div className="mx-auto max-w-6xl px-6 py-3 flex items-center gap-4">
-          <div className="flex items-center gap-2 font-semibold">
+        {/* Wraps on narrow screens: brand + controls stay on row one, the project picker drops to its own
+            full-width row (it's the primary scoping control — truncating it to a sliver would be worse). */}
+        <div className="mx-auto max-w-6xl px-4 sm:px-6 py-3 flex flex-wrap items-center gap-x-3 gap-y-2 sm:gap-x-4">
+          <div className="flex items-center gap-2 font-semibold shrink-0">
             <Activity className="size-5 text-primary" /> auralis
             <span className="text-muted-foreground font-normal text-sm">· brain</span>
           </div>
@@ -130,7 +123,7 @@ export default function App() {
             onValueChange={(v: string | null) => { setProject(v ?? ""); setRunSel("") }}
             items={projects.map((p) => ({ value: p.project, label: `${p.project} · ${p.docs} docs${p.events ? ` · ${p.events} ev` : ""}` }))}
           >
-            <SelectTrigger className="w-64" title="project (only those with data are listed)">
+            <SelectTrigger className="order-last w-full max-sm:h-10 sm:order-none sm:w-64" title="project (only those with data are listed)">
               <SelectValue placeholder={projects.length ? "select project" : "no projects with data"} />
             </SelectTrigger>
             <SelectContent>
@@ -141,17 +134,18 @@ export default function App() {
               ))}
             </SelectContent>
           </Select>
-          <Button variant="outline" size="sm" onClick={() => setLive((v) => !v)}>
+          {/* max-sm:h-10 = comfortable touch targets on phones without changing the desktop density. */}
+          <Button variant="outline" size="sm" className="max-sm:h-10" onClick={() => setLive((v) => !v)}>
             {live ? <Pause className="size-4" /> : <Play className="size-4" />}
             {live ? "live" : "paused"}
           </Button>
-          <Button variant="ghost" size="icon" onClick={() => setTick((t) => t + 1)} title="refresh">
+          <Button variant="ghost" size="icon" className="max-sm:size-10" onClick={() => setTick((t) => t + 1)} title="refresh">
             <RefreshCw className="size-4" />
           </Button>
         </div>
       </header>
 
-      <main className="mx-auto max-w-6xl p-6 space-y-6">
+      <main className="mx-auto max-w-6xl p-4 sm:p-6 space-y-6">
         {error && (
           <Card className="border-destructive/50">
             <CardContent className="py-3 text-sm text-destructive">
@@ -168,7 +162,9 @@ export default function App() {
         </div>
 
         <Tabs defaultValue="activity" className="space-y-4">
-          <TabsList>
+          {/* Six triggers don't fit a phone; scroll the bar instead of wrapping it (single-row nav).
+              The scrollbar is hidden — the clipped last trigger is the affordance that there's more. */}
+          <TabsList className="max-w-full justify-start overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             <TabsTrigger value="activity">Activity</TabsTrigger>
             <TabsTrigger value="timing">Timing</TabsTrigger>
             <TabsTrigger value="runs">Runs</TabsTrigger>
@@ -185,7 +181,7 @@ export default function App() {
                     Activity Timeline
                     {updatedAt && <span className="text-xs font-normal text-muted-foreground">updated {updatedAt}</span>}
                   </CardTitle>
-                  <div className="flex items-center gap-1.5 text-xs">
+                  <div className="flex items-center gap-1.5 text-xs flex-wrap">
                     {sc.tasks > 0 && <Badge variant="secondary">{sc.tasks} tasks</Badge>}
                     {sc.deduped > 0 && <Badge variant="secondary" className="text-amber-400">deduped {sc.deduped}</Badge>}
                     {sc.overlaps > 0 && <Badge variant="secondary" className="text-red-400">overlaps {sc.overlaps}</Badge>}
@@ -205,7 +201,7 @@ export default function App() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <span className="font-mono truncate">{runId || "—"}</span>
+                  <span className="font-mono truncate min-w-0">{runId || "—"}</span>
                   {runSel && <button className="text-primary underline" onClick={() => setRunSel("")}>back to latest</button>}
                 </div>
               </CardHeader>

@@ -3,7 +3,7 @@
 // dashboard is a separate package, so there's no shared type import).
 
 export interface TimelineEvent {
-  seq?: number;
+  seq: number; // server-assigned (AUTOINCREMENT pk) — always present, and the timeline's stable list key
   runId?: string;
   project?: string;
   kind: string; // phase | intent | note | finding | dedup | overlap | repair

@@ -1,6 +1,7 @@
 // A small force-directed graph: d3-force does the physics, we render plain SVG so it inherits the theme.
-// Nodes sized by degree; drag a node to pin, drag the canvas to pan, wheel to zoom, hover to spotlight a
-// node's neighborhood (its edges get their predicate labelled). No canvas, no wrapper lib.
+// Nodes sized by degree; drag a node to pin it where you drop it (double-click to unpin), drag the canvas
+// to pan, wheel to zoom, hover to spotlight a node's neighborhood (its edges get their predicate
+// labelled). No canvas, no wrapper lib.
 import { useEffect, useMemo, useRef, useState } from "react"
 import { forceCenter, forceCollide, forceLink, forceManyBody, forceSimulation, type Simulation } from "d3-force"
 import type { GraphAllEdge } from "@/lib/api"
@@ -15,11 +16,16 @@ const short = (s: string, n = 22) => (s.length > n ? s.slice(0, n - 1) + "…" :
 const clampK = (k: number) => Math.min(5, Math.max(0.25, k))
 
 export function ForceGraph({ edges, onSelect }: { edges: GraphAllEdge[]; onSelect?: (key: string) => void }) {
+  // When edges change mid-run (a new finding landed), rebuild the node list but seed each surviving node
+  // from its previous position — incl. fx/fy, so pins survive — and only genuinely new nodes swing into
+  // place. Without this every refresh re-randomized the whole layout. Idempotent, so StrictMode's
+  // double-invoke is harmless.
+  const prev = useRef<Map<string, N>>(new Map())
   const { nodes, links } = useMemo(() => {
     const map = new Map<string, N>()
     const deg = new Map<string, number>()
     const bump = (key: string, label: string) => {
-      if (!map.has(key)) map.set(key, { id: key, label, deg: 0 })
+      if (!map.has(key)) map.set(key, { ...prev.current.get(key), id: key, label, deg: 0 })
       deg.set(key, (deg.get(key) ?? 0) + 1)
     }
     const ls: L[] = []
@@ -29,6 +35,7 @@ export function ForceGraph({ edges, onSelect }: { edges: GraphAllEdge[]; onSelec
       ls.push({ source: e.subj_key, target: e.obj_key, predicate: e.predicate })
     }
     for (const [k, d] of deg) map.get(k)!.deg = d
+    prev.current = map
     return { nodes: [...map.values()], links: ls }
   }, [edges])
 
@@ -101,11 +108,16 @@ export function ForceGraph({ edges, onSelect }: { edges: GraphAllEdge[]; onSelec
       if (n) { n.fx = (vb.x - view.x) / view.k; n.fy = (vb.y - view.y) / view.k }
     }
   }
+  // Releasing keeps fx/fy set — the node stays pinned where it was dropped. Double-click unpins it
+  // (a brief alpha kick lets it swing back into the layout).
   const onUp = () => {
-    const cur = drag.current
-    if (cur?.kind === "node") { const n = nodes.find((x) => x.id === cur.id); if (n) { n.fx = null; n.fy = null } }
     drag.current = null
     simRef.current?.alphaTarget(0)
+  }
+  const unpin = (n: N) => () => {
+    n.fx = null
+    n.fy = null
+    simRef.current?.alpha(0.3).restart()
   }
 
   const dim = (id: string) => hover != null && hover !== id && !neighbors.get(hover)?.has(id)
@@ -163,9 +175,10 @@ export function ForceGraph({ edges, onSelect }: { edges: GraphAllEdge[]; onSelec
                 onPointerEnter={() => setHover(n.id)}
                 onPointerLeave={() => setHover(null)}
                 onClick={() => onSelect?.(n.id)}
+                onDoubleClick={unpin(n)}
                 className="cursor-grab"
               >
-                <circle r={(5 + n.deg * 2)} className="fill-primary/80 stroke-background" strokeWidth={1.5 / view.k} />
+                <circle r={(5 + n.deg * 2)} className={`fill-primary/80 ${n.fx != null ? "stroke-primary" : "stroke-background"}`} strokeWidth={1.5 / view.k} />
                 <text x={(8 + n.deg * 2)} y={4 / view.k} className="fill-foreground" style={{ fontSize: 10 / view.k, pointerEvents: "none" }}>{short(n.label)}</text>
               </g>
             ),

@@ -3,7 +3,9 @@
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
-  "bin": { "auralis": "bin/auralis.mjs" },
+  "bin": {
+    "auralis": "bin/auralis.mjs"
+  },
   "scripts": {
     "test": "vitest run",
     "dev": "tsx src/run.ts",
@@ -46,5 +48,14 @@
     "tsx": "^4.23.0",
     "typescript": "^6.0.3",
     "vitest": "^4.1.9"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@google/genai",
+      "esbuild",
+      "onnxruntime-node",
+      "protobufjs",
+      "sharp"
+    ]
   }
 }
