@@ -8,10 +8,10 @@ import KindChip from './KindChip.astro'
 
 const d = runData.derived
 
-// First 5 non-trace beats + the closing phase — a compact slice of the run's
-// narrative arc (plan → tasks → findings → "run complete").
+// First 7 non-trace beats + the closing phase — a compact slice of the run's
+// narrative arc (plan → tasks → findings → overlaps → "run complete").
 const beats = runData.events.filter((e) => e.kind !== 'trace' && e.text)
-const feed = [...beats.slice(0, 5), beats[beats.length - 1]]
+const feed = [...beats.slice(0, 7), beats[beats.length - 1]]
 
 const findings = runData.events.filter((e) => e.kind === 'finding')
 const wall = fmtOffset(runData.events[runData.events.length - 1].t)

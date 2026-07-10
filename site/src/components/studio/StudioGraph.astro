@@ -71,7 +71,7 @@ const topHub = files.reduce((m, n) => (n.deg > m.deg ? n : m), files[0])
 const short = (s: string, n = 15) => (s.length > n ? `${s.slice(0, n - 1)}…` : s)
 ---
 
-<div class="relative aspect-8/5 min-h-56 w-full overflow-hidden">
+<div class="relative aspect-8/5 min-h-56 w-full overflow-hidden lg:aspect-auto lg:h-full">
   <p class="sr-only">
     the studio's graph page, recreated from the recorded run: {workers.length} workers and the{' '}
     {files.length} files they read — {topHub.label} sits where {topHub.deg} workers converged

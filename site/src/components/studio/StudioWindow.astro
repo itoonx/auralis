@@ -102,7 +102,7 @@ const pill = `Auralis · ${runData.derived.byKind.finding} findings · ${runData
         ))}
       </div>
 
-      <div class="min-w-0 flex-1 md:min-h-[460px]">
+      <div class="min-w-0 flex-1 md:min-h-[460px] lg:h-[660px] lg:min-h-0 lg:overflow-hidden">
         <div class="st-panel" id="st-panel-overview" role="tabpanel" aria-labelledby="st-tab-overview">
           <slot name="overview" />
         </div>
@@ -294,6 +294,14 @@ const pill = `Auralis · ${runData.derived.byKind.finding} findings · ${runData
   @keyframes st-tab-fill {
     from { transform: scaleX(0); }
     to { transform: scaleX(1); }
+  }
+  /* desktop: all three tabs share one fixed window height (set on the panel
+     container). each panel fills it; overview — the tallest tab — scrolls
+     inside if a narrow desktop wraps it past the fixed height, so switching
+     tabs never resizes the window. */
+  @media (min-width: 1024px) {
+    .st-panel { height: 100%; }
+    #st-panel-overview { overflow-y: auto; }
   }
   .st-card {
     border-radius: 0.75rem;
