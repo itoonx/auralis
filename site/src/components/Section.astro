@@ -1,0 +1,16 @@
+---
+interface Props {
+  id: string
+  title?: string
+}
+const { id, title } = Astro.props
+---
+
+<!-- /85 veil (not solid): the fixed hero field floats behind every section,
+     peeking through like the reference's bg-paper/80 panels -->
+<section id={id} class="border-t border-lp-border bg-lp-bg/85">
+  <div class="mx-auto max-w-6xl px-6 py-20 md:py-28">
+    {title && <h2 class="mb-10 font-sans text-3xl font-medium lowercase text-lp-fg md:text-4xl">{title}</h2>}
+    <slot />
+  </div>
+</section>

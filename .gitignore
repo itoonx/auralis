@@ -11,3 +11,4 @@ dist/
 .claude/*
 !.claude/settings.json
 .DS_Store
+.astro/

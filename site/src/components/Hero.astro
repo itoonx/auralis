@@ -1,0 +1,67 @@
+---
+const clone = 'git clone https://github.com/itoonx/Auralis'
+---
+
+<!-- the ambient field (canvas + grid) lives in Field.astro, outside the
+     ScrollSmoother content wrapper — a transformed ancestor would break its
+     position:fixed. the hero-* classes are animation hooks for Motion.astro:
+     the H1 stays transform-only (it's the LCP element and must paint). -->
+<!-- full-viewport hero: svh (not vh) so mobile browser chrome doesn't cause
+     an overflow jump; content vertically centered, py guards tiny landscape
+     screens from clipping. -->
+<header id="hero" class="relative flex min-h-svh items-center">
+  <div class="relative mx-auto w-full max-w-6xl px-6 py-24">
+    <p class="hero-kicker flex items-center gap-3 font-mono text-xs tracking-widest text-lp-muted">
+      <span class="h-px w-10 bg-lp-accent"></span>
+      auralis · the coordination layer for agent fleets
+    </p>
+    <h1 class="mt-6 max-w-4xl text-balance font-serif text-6xl font-medium lowercase leading-none tracking-tight text-lp-fg md:text-7xl lg:text-8xl">
+      the model isn't the bottleneck.
+      <span class="block font-light italic text-lp-muted">your shared state is.</span>
+    </h1>
+    <p class="hero-copy mt-6 max-w-xl text-pretty text-lp-muted">
+      we timed it: the LLM call is 99.9% of a fleet's wall-clock; coordination adds ~2.4ms. auralis
+      makes shared state explicit, persistent, and never accidental — one brain, every agent, any
+      runtime.
+    </p>
+
+    <div class="hero-ctas mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
+      <!-- aria-live: the ✓ copied swap is a status message (WCAG 4.1.3) —
+           without it, screen-reader users get no confirmation the copy worked -->
+      <button
+        id="clone-cta"
+        type="button"
+        data-cmd={clone}
+        aria-live="polite"
+        class="w-fit cursor-pointer rounded border border-lp-border bg-lp-surface/80 px-5 py-3 font-mono text-sm text-lp-fg backdrop-blur transition-colors hover:border-lp-muted"
+        title="copy to clipboard">$ {clone}</button>
+      <a
+        href="https://github.com/itoonx/Auralis/blob/main/docs/proven.md"
+        class="w-fit px-4 py-3 font-mono text-sm text-lp-muted underline underline-offset-4 hover:text-lp-fg">read the proof →</a>
+    </div>
+    <p class="hero-note mt-3 font-mono text-xs text-lp-muted">
+      running in five commands · no API key — workers reuse your Claude Code login
+    </p>
+  </div>
+</header>
+
+<script>
+  // copy-command CTA — speaks the event vocabulary (✓) for 800ms
+  const cta = document.getElementById('clone-cta') as HTMLButtonElement | null
+  if (cta) {
+    const original = cta.textContent
+    cta.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(cta.dataset.cmd!)
+        cta.textContent = '✓ copied'
+        cta.classList.add('text-lp-accent')
+        setTimeout(() => {
+          cta.textContent = original
+          cta.classList.remove('text-lp-accent')
+        }, 800)
+      } catch {
+        /* clipboard unavailable — the command is selectable text either way */
+      }
+    })
+  }
+</script>

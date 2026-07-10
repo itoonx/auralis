@@ -1,0 +1,98 @@
+---
+import Section from './Section.astro'
+
+// Every row quotes docs/proven.md (or the R1 controlled baseline, commit 437929c).
+// CI asserts the headline numbers exist in the built HTML.
+const rows = [
+  {
+    lead: true,
+    claim: 'memory beats full-context — controlled baseline',
+    result: '93.3% > 90.0% > 60.0%',
+    detail: 'memory / full-context / grep',
+    shape: '90 questions × 3 arms · 12.9× fewer tokens',
+  },
+  {
+    claim: 'agents coordinate as a team',
+    result: 'redundant work −53%',
+    detail: '17 → 8',
+    shape: 'live 3-task run, this repo',
+  },
+  {
+    claim: 'duplicates prevented, not advised',
+    result: 'prevented-dupes = 4',
+    detail: 'redundant reads 4 → 0',
+    shape: '3-worker parallel run',
+  },
+  {
+    claim: 'ranking earns its place',
+    result: '25% → 75%',
+    detail: 'precision@1, A/B bench',
+    shape: 'guardrail held · bench caught 2 real bugs',
+  },
+  {
+    claim: 'memory outlives the session',
+    result: '1 file opened vs 9',
+    detail: 'warm vs cold',
+    shape: 'separate process, prior findings recalled',
+  },
+  {
+    claim: 'as_of answers “when”',
+    result: 'march → 30s · july → 60s',
+    detail: 'timeout changed june 1',
+    shape: 'temporal recall on a real fact pair',
+  },
+  {
+    claim: 'the sleep job judges for real',
+    result: '10min → 30min conflict retired',
+    detail: 'reason recorded',
+    shape: 'overnight loop · atomic pre-mutation snapshot',
+  },
+  {
+    claim: 'the brain defends its own memory',
+    result: 'bad write rejected at the gate',
+    detail: 'nothing captured',
+    shape: 'a dead run ($0 credit) tried to store its error',
+  },
+  {
+    claim: 'real multi-file programs, first-try PASS',
+    result: '3-file REST API · expr-evaluator CLI',
+    detail: 'interfaces agreed via the brain',
+    shape: 'verified independently, incl. restart persistence',
+  },
+]
+---
+
+<Section id="proof" title="proven on live runs">
+  <div class="overflow-x-auto rounded-md border border-lp-border">
+    <table class="w-full min-w-[720px] border-collapse font-mono text-[13px]">
+      <thead>
+        <tr class="border-b border-lp-border text-left text-xs text-lp-muted">
+          <th class="px-4 py-2 font-normal" scope="col">claim</th>
+          <th class="px-4 py-2 font-normal" scope="col">measured</th>
+          <th class="px-4 py-2 font-normal" scope="col">run shape</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((r) => (
+          <tr class:list={['border-b border-lp-border last:border-b-0', r.lead && 'bg-lp-surface']}>
+            <td class="px-4 py-3 text-lp-muted">
+              <span class="mr-2 text-lp-accent" aria-hidden="true">✓</span>
+              <span class:list={[r.lead && 'text-lp-fg']}>{r.claim}</span>
+            </td>
+            <td class="px-4 py-3">
+              <b class="text-lp-fg">{r.result}</b>
+              <span class="ml-2 text-lp-muted">{r.detail}</span>
+            </td>
+            <td class="px-4 py-3 text-lp-muted">{r.shape}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+
+  <p class="mt-4 rounded border border-dashed border-lp-border bg-lp-surface px-4 py-3 font-mono text-xs text-lp-muted">
+    <span class="text-lp-fg">⚠ each live figure is one non-deterministic run — directional, not a benchmark.</span>
+    &nbsp;pnpm bench turns any of them into mean ± spread; 50 deterministic tests pin the mechanisms.
+    <a class="ml-2 text-lp-fg underline underline-offset-4" href="https://github.com/itoonx/Auralis/blob/main/docs/proven.md">full results →</a>
+  </p>
+</Section>

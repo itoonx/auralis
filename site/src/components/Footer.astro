@@ -1,0 +1,22 @@
+---
+const docs = ['platform', 'proven', 'mcp', 'production', 'reference', 'roadmap', 'research-memory-os']
+const gh = 'https://github.com/itoonx/Auralis'
+---
+
+<footer class="border-t border-lp-border bg-lp-bg/85">
+  <div class="mx-auto max-w-6xl px-6 py-16">
+    <code class="inline-block rounded border border-lp-border bg-lp-surface px-5 py-3 font-mono text-sm text-lp-fg">
+      $ git clone {gh}
+    </code>
+    <nav class="mt-8 flex flex-wrap gap-x-4 gap-y-2 font-mono text-xs text-lp-muted" aria-label="documentation">
+      {docs.map((d) => (
+        <a class="underline underline-offset-4 hover:text-lp-fg" href={`${gh}/blob/main/docs/${d}.md`}>{d}</a>
+      ))}
+    </nav>
+    <p class="mt-8 font-mono text-xs text-lp-muted">
+      built with <a class="underline underline-offset-4 hover:text-lp-fg" href="https://github.com/jigjoy-ai/mozaik">mozaik</a>
+      and claude code · <a class="underline underline-offset-4 hover:text-lp-fg" href={gh}>github ↗</a>
+      · no third-party analytics on this page
+    </p>
+  </div>
+</footer>

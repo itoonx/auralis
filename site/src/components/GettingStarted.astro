@@ -1,0 +1,46 @@
+---
+import Section from './Section.astro'
+
+const steps = [
+  {
+    cmd: 'git clone https://github.com/itoonx/Auralis && cd Auralis\npnpm install && pnpm test',
+    note: 'prerequisites: node 20+ · pnpm · bun ≥ 1.2 · docker (daemon stack only) · claude code logged in',
+  },
+  {
+    cmd: 'node bin/auralis.mjs start',
+    note: 'the daemon — studio → localhost:47780 · brain api → :47778. no docker? every command boots a temporary brain itself.',
+  },
+  {
+    cmd: 'AURALIS_PROJECT=myrepo AURALIS_PROJECT_DIR=/path/to/repo \\\npnpm analyze "how does auth work?"',
+    note: 'point a society at any repository — it analyses together, sharing one brain.',
+  },
+  {
+    cmd: 'AURALIS_MODE=build AURALIS_ACCEPT=restapi AURALIS_PROJECT_DIR=./my-app \\\nAURALIS_GOAL="a todo REST API over Node\'s http" pnpm dev',
+    note: 'or point it at an empty folder and the fleet builds one — verified by an independent harness.',
+  },
+  {
+    cmd: 'open http://localhost:47780',
+    note: 'watch it work: live timeline (▸ ✓ ⇄ ↻), run scorecards, the knowledge graph.',
+  },
+]
+---
+
+<Section id="start" title="running in five commands">
+  <ol class="flex flex-col gap-4">
+    {steps.map((s, i) => (
+      <li class="rounded-md border border-lp-border bg-lp-surface">
+        <div class="flex items-start gap-4 p-4">
+          <span class="mt-0.5 font-mono text-xs text-lp-muted">{i + 1}</span>
+          <div class="min-w-0 flex-1">
+            <pre class="overflow-x-auto font-mono text-[13px] leading-6 text-lp-fg"><code>$ {s.cmd}</code></pre>
+            <p class="mt-2 font-mono text-xs text-lp-muted">{s.note}</p>
+          </div>
+        </div>
+      </li>
+    ))}
+  </ol>
+  <p class="mt-6 text-pretty text-sm text-lp-muted">
+    point auralis at a repository and a society of agents analyses it together; point it at an
+    empty folder and they build one — the same coordination either way.
+  </p>
+</Section>

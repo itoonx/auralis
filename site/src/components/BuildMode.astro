@@ -1,0 +1,162 @@
+---
+import Section from './Section.astro'
+---
+
+<Section id="build" title="build mode — workers write, auralis verifies">
+  <!-- bento strip: each step gets a mini animated diagram (decoration only,
+       aria-hidden; base svg state is the finished picture). -->
+  <ol class="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
+    <li class="rounded-2xl border border-lp-border bg-lp-surface p-5 transition-colors hover:border-lp-muted/40">
+      <div class="mb-4 text-lp-muted" aria-hidden="true">
+        <svg viewBox="0 0 120 48" class="h-14 w-full" fill="none" stroke-linecap="round">
+          <path class="bm-branch" d="M10 24 H 34" pathLength="1" stroke="currentColor" stroke-width="1.5" opacity=".7" />
+          <path class="bm-branch" style="animation-delay:.4s" d="M34 24 C 52 24, 52 10, 70 10" pathLength="1" stroke="currentColor" stroke-width="1.5" opacity=".55" />
+          <path class="bm-branch" style="animation-delay:.55s" d="M34 24 H 70" pathLength="1" stroke="currentColor" stroke-width="1.5" opacity=".55" />
+          <path class="bm-branch" style="animation-delay:.7s" d="M34 24 C 52 24, 52 38, 70 38" pathLength="1" stroke="currentColor" stroke-width="1.5" opacity=".55" />
+          <rect x="76" y="5" width="26" height="10" rx="2" stroke="currentColor" stroke-width="1.2" opacity=".6" />
+          <rect x="76" y="19" width="26" height="10" rx="2" stroke="currentColor" stroke-width="1.2" opacity=".6" />
+          <rect x="76" y="33" width="26" height="10" rx="2" stroke="currentColor" stroke-width="1.2" opacity=".6" />
+        </svg>
+      </div>
+      <div class="font-mono text-xs text-lp-muted">1</div>
+      <h3 class="mt-1 font-mono text-sm text-lp-fg">plan</h3>
+      <p class="mt-2 text-xs leading-5 text-lp-muted">the goal decomposes into files with owners — one worker, one file.</p>
+    </li>
+
+    <li class="rounded-2xl border border-lp-border bg-lp-surface p-5 transition-colors hover:border-lp-muted/40">
+      <div class="mb-4 text-lp-muted" aria-hidden="true">
+        <svg viewBox="0 0 120 48" class="h-14 w-full" fill="none" stroke-linecap="round">
+          <text x="8" y="20" font-size="8" fill="currentColor" opacity=".6" font-family="var(--font-mono)">play(a,b)</text>
+          <path class="bm-send" d="M10 30 H 66" pathLength="1" stroke="currentColor" stroke-width="1.5" opacity=".6" />
+          <path class="bm-send" d="M60 25 l7 5 -7 5" pathLength="1" stroke="currentColor" stroke-width="1.5" opacity=".6" />
+          <circle class="bm-brain text-lp-accent" cx="88" cy="30" r="11" stroke="currentColor" stroke-width="1.5" />
+          <path d="M83 30c2-4 8-4 10 0M85 34c2 2 4 2 6 0" stroke="currentColor" stroke-width="1.2" opacity=".6" />
+        </svg>
+      </div>
+      <div class="font-mono text-xs text-lp-muted">2</div>
+      <h3 class="mt-1 font-mono text-sm text-lp-fg">contract → brain</h3>
+      <p class="mt-2 text-xs leading-5 text-lp-muted">the game.js worker publishes play(a,b) → win|lose|tie; teammates pull it instead of guessing.</p>
+    </li>
+
+    <li class="rounded-2xl border border-lp-border bg-lp-surface p-5 transition-colors hover:border-lp-muted/40">
+      <div class="mb-4 text-lp-muted" aria-hidden="true">
+        <svg viewBox="0 0 120 48" class="h-14 w-full" fill="none" stroke-linecap="round">
+          <path class="bm-type" d="M10 12 H 100" pathLength="1" stroke="currentColor" stroke-width="2" opacity=".6" />
+          <path class="bm-type" style="animation-delay:.5s" d="M10 24 H 84" pathLength="1" stroke="currentColor" stroke-width="2" opacity=".6" />
+          <path class="bm-type" style="animation-delay:1s" d="M10 36 H 64" pathLength="1" stroke="currentColor" stroke-width="2" opacity=".6" />
+          <path class="bm-deny text-lp-accent" d="M74 30 v12" stroke="currentColor" stroke-width="1.5" />
+        </svg>
+      </div>
+      <div class="font-mono text-xs text-lp-muted">3</div>
+      <h3 class="mt-1 font-mono text-sm text-lp-fg">write in parallel</h3>
+      <p class="mt-2 text-xs leading-5 text-lp-muted">claim-on-write guards every Edit — a write to a teammate's file is denied.</p>
+    </li>
+
+    <li class="rounded-2xl border border-lp-border bg-lp-surface p-5 transition-colors hover:border-lp-muted/40">
+      <div class="mb-4 text-lp-muted" aria-hidden="true">
+        <svg viewBox="0 0 120 48" class="h-14 w-full" fill="none" stroke-linecap="round">
+          <rect x="8" y="14" width="42" height="22" rx="4" stroke="currentColor" stroke-width="1.5" opacity=".6" />
+          <path d="M22 25 l5 -6 M22 25 l5 6" stroke="currentColor" stroke-width="1.2" opacity=".5" />
+          <path d="M36 19 v12" stroke="currentColor" stroke-width="1.2" opacity=".5" />
+          <path class="bm-run" d="M50 25 H 74" pathLength="1" stroke="currentColor" stroke-width="1.5" opacity=".6" />
+          <path class="bm-check text-lp-accent" d="M82 26 l6 6 12 -14" pathLength="1" stroke="currentColor" stroke-width="2" />
+        </svg>
+      </div>
+      <div class="font-mono text-xs text-lp-muted">4</div>
+      <h3 class="mt-1 font-mono text-sm text-lp-fg">independent verdict</h3>
+      <p class="mt-2 text-xs leading-5 text-lp-muted">workers get no shell. an acceptance harness runs the program and asserts its contract — you can't pass by writing assert(true).</p>
+    </li>
+
+    <li class="rounded-2xl border border-lp-border bg-lp-surface p-5 transition-colors hover:border-lp-muted/40">
+      <div class="mb-4 text-lp-muted" aria-hidden="true">
+        <svg viewBox="0 0 120 48" class="h-14 w-full" fill="none" stroke-linecap="round">
+          <g class="bm-fail">
+            <path d="M14 17 l14 14 M28 17 l-14 14" stroke="currentColor" stroke-width="2" opacity=".65" />
+          </g>
+          <g class="bm-rework">
+            <path d="M52 33a9 9 0 1 1 9 -9" stroke="currentColor" stroke-width="1.5" opacity=".6" />
+            <path d="M57 24 l4 0 0 -4" stroke="currentColor" stroke-width="1.5" opacity=".6" />
+          </g>
+          <path class="bm-pass text-lp-accent" d="M86 25 l7 7 14 -16" pathLength="1" stroke="currentColor" stroke-width="2" />
+        </svg>
+      </div>
+      <div class="font-mono text-xs text-lp-muted">5</div>
+      <h3 class="mt-1 font-mono text-sm text-lp-fg">fail → rework → pass</h3>
+      <p class="mt-2 text-xs leading-5 text-lp-muted">a forced FAIL fed its fail lines to the rework; attempt #2 passed. the loop closes itself.</p>
+    </li>
+  </ol>
+  <p class="mt-8 max-w-2xl text-sm text-lp-muted">
+    measured: a 3-file REST API (store / router / server, interfaces agreed via the brain, reuses=2)
+    and an expression-evaluator CLI (lexer → parser → cli), both first-try PASS — verified
+    independently, including a server-restart persistence check.
+    <span class="text-lp-fg">proven small, not scaled</span> — clean decompositions, disjoint
+    files; overlapping-edit merges and a true sandbox are roadmap.
+  </p>
+</Section>
+
+<style>
+  .bm-branch,
+  .bm-send,
+  .bm-run {
+    stroke-dasharray: 1;
+    animation: bm-draw 3.6s ease-in-out infinite;
+  }
+  @keyframes bm-draw {
+    0% { stroke-dashoffset: 1; }
+    35%, 85% { stroke-dashoffset: 0; }
+    100% { stroke-dashoffset: 0; opacity: 0.15; }
+  }
+  .bm-brain {
+    animation: bm-brain 3.6s ease-in-out infinite;
+  }
+  @keyframes bm-brain {
+    0%, 25% { opacity: 0.4; }
+    50%, 85% { opacity: 1; }
+    100% { opacity: 0.4; }
+  }
+  /* typing lines grow from the left; the guard bar flashes on the denied row */
+  .bm-type {
+    transform-box: fill-box;
+    transform-origin: left;
+    animation: bm-type 3.2s ease-in-out infinite;
+  }
+  @keyframes bm-type {
+    0% { transform: scaleX(0.1); }
+    45%, 100% { transform: scaleX(1); }
+  }
+  .bm-deny {
+    animation: bm-deny 3.2s ease-in-out infinite;
+  }
+  @keyframes bm-deny {
+    0%, 55% { opacity: 0.2; }
+    70%, 88% { opacity: 0.95; }
+    100% { opacity: 0.2; }
+  }
+  .bm-check,
+  .bm-pass {
+    stroke-dasharray: 1;
+    animation: bm-check 3.6s ease-in-out infinite;
+  }
+  @keyframes bm-check {
+    0%, 40% { stroke-dashoffset: 1; }
+    65%, 90% { stroke-dashoffset: 0; }
+    100% { stroke-dashoffset: 0; opacity: 0.2; }
+  }
+  .bm-fail {
+    animation: bm-fail 3.6s ease-in-out infinite;
+  }
+  @keyframes bm-fail {
+    0%, 30% { opacity: 1; }
+    55%, 90% { opacity: 0.25; }
+    100% { opacity: 1; }
+  }
+  .bm-rework {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: bm-rework 3.6s ease-in-out infinite;
+  }
+  @keyframes bm-rework {
+    0%, 25% { transform: rotate(0deg); }
+    60%, 100% { transform: rotate(360deg); }
+  }
+</style>

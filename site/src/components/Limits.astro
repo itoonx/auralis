@@ -1,0 +1,38 @@
+---
+import Section from './Section.astro'
+
+const limits = [
+  'the live numbers are n=1 directional — each headline figure is one non-deterministic run. pnpm bench reproduces any of them as mean ± spread; 50 deterministic tests in CI pin the mechanisms, not the magnitudes.',
+  'build mode is proven small, not scaled — clean decompositions, disjoint files, a handful of runs. overlapping-edit merges are still ahead.',
+  'v1 execution is confinement, not a true sandbox.',
+  'recall used to score 53.4% — below full-context. the instrument was broken (84% of losses were retrieval, not the reader). we fixed the instrument and re-ran the controlled baseline: memory 93.3% > full-context 90.0% > grep 60.0%, at 12.9× fewer tokens. the old number stays in the docs because pretending it never happened would defeat the point of this page.',
+]
+
+const roadmap = [
+  'model/turn routing — timing says it’s the biggest lever',
+  'overlapping-edit merges in build mode',
+  'cross-machine fleets · heterogeneous runtimes',
+]
+---
+
+<Section id="limits" title="honest limits & roadmap">
+  <ul class="flex max-w-3xl flex-col gap-4">
+    {limits.map((l) => (
+      <li class="flex gap-3 text-sm text-lp-muted">
+        <span class="text-lp-fg" aria-hidden="true">⚠</span>
+        <span class="text-pretty">{l}</span>
+      </li>
+    ))}
+  </ul>
+  <ul class="mt-8 flex max-w-3xl flex-col gap-2">
+    {roadmap.map((r) => (
+      <li class="flex gap-3 font-mono text-xs text-lp-muted">
+        <span aria-hidden="true">↻</span>
+        <span>{r}</span>
+      </li>
+    ))}
+  </ul>
+  <a
+    class="mt-6 inline-block font-mono text-xs text-lp-muted underline underline-offset-4 hover:text-lp-fg"
+    href="https://github.com/itoonx/Auralis/blob/main/docs/roadmap.md">docs/roadmap.md →</a>
+</Section>

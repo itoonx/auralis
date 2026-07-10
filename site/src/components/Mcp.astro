@@ -1,0 +1,62 @@
+---
+import Section from './Section.astro'
+
+const snippet = `{ "mcpServers": { "auralis": {
+    "command": "pnpm", "args": ["-C", "/path/to/auralis", "mcp"] } } }`
+
+const ingress = [
+  ['substantive prompt (≥80 chars)', 'knowledge (learn)', '1.0 (human)', 'unpinned — fades if never used'],
+  ['trivial prompt / slash / !shell', 'timeline only / dropped', '—', 'never pollutes recall'],
+  ['assistant conclusion (≥120 chars)', 'knowledge (learn)', '0.5 (agent)', 'credibility earned via cite'],
+  ['Write / Edit', 'timeline trace only', '—', 'observability, never knowledge'],
+  ['commits, reads, other tools', 'dropped', '—', 'git already records them'],
+]
+---
+
+<Section id="mcp" title="claude code + mcp — session memory, both ways">
+  <div class="grid gap-10 lg:grid-cols-[1fr_1.2fr]">
+    <div class="flex min-w-0 flex-col gap-4 text-pretty text-sm text-lp-muted">
+      <p>
+        add one block to <span class="font-mono text-lp-fg">.mcp.json</span> and your session gets
+        <span class="font-mono text-lp-fg">analyze</span> and
+        <span class="font-mono text-lp-fg">build</span> tools — Claude calling auralis calling
+        Claude, proven live (analyze answered in 49s; progress notifications keep long builds alive).
+      </p>
+      <p>
+        then the part a standalone memory plugin can't do: what you tell Claude Code becomes
+        recallable by fleet workers, and what the fleet learns surfaces back in your prompts —
+        bidirectional, on one replayable timeline.
+      </p>
+      <pre class="overflow-x-auto rounded-md border border-lp-border bg-lp-surface p-4 font-mono text-xs leading-6 text-lp-fg"><code>{snippet}</code></pre>
+      <p class="font-mono text-xs">
+        no LLM in the write path · searchable the same instant · fail-silent if the brain is down
+      </p>
+    </div>
+
+    <div class="min-w-0 overflow-x-auto rounded-md border border-lp-border">
+      <table class="w-full min-w-[560px] border-collapse font-mono text-xs">
+        <caption class="border-b border-lp-border bg-lp-surface px-4 py-2 text-left text-lp-muted">
+          the ingress — every session event classified at write time, deterministically
+        </caption>
+        <thead>
+          <tr class="border-b border-lp-border text-left text-lp-muted">
+            <th class="px-3 py-2 font-normal" scope="col">session event</th>
+            <th class="px-3 py-2 font-normal" scope="col">lane</th>
+            <th class="px-3 py-2 font-normal" scope="col">trust</th>
+            <th class="px-3 py-2 font-normal" scope="col">fate</th>
+          </tr>
+        </thead>
+        <tbody class="text-lp-muted">
+          {ingress.map((r) => (
+            <tr class="border-b border-lp-border last:border-b-0">
+              <td class="px-3 py-2 text-lp-fg">{r[0]}</td>
+              <td class="px-3 py-2">{r[1]}</td>
+              <td class="px-3 py-2">{r[2]}</td>
+              <td class="px-3 py-2">{r[3]}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</Section>

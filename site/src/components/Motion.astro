@@ -1,0 +1,167 @@
+---
+// GSAP motion layer — smooth scroll + per-component scroll reveals.
+// Everything here is decoration time: it lives entirely inside a
+// prefers-reduced-motion: no-preference matchMedia context, animates
+// transforms/opacity only (no layout, no numbers — data time stays in the
+// replay's virtual clock), and the page is fully readable with JS off
+// because initial states are set from JS, never from CSS.
+---
+
+<script>
+  import { gsap } from 'gsap'
+  import { ScrollTrigger } from 'gsap/ScrollTrigger'
+  import { ScrollSmoother } from 'gsap/ScrollSmoother'
+
+  gsap.registerPlugin(ScrollTrigger, ScrollSmoother)
+
+  const mm = gsap.matchMedia()
+
+  mm.add('(prefers-reduced-motion: no-preference)', () => {
+    // ---- smooth scroll -------------------------------------------------
+    // native scrollbar drives; the content wrapper eases toward it. the
+    // smoothed position is published on window.__lpScroll so the WebGL
+    // field (outside the wrapper) drifts in sync with the eased content.
+    const smoother = ScrollSmoother.create({
+      wrapper: '#smooth-wrapper',
+      content: '#smooth-content',
+      smooth: 1.1,
+      effects: true,
+      onUpdate: (self) => {
+        ;(window as unknown as { __lpScroll?: number }).__lpScroll = self.scrollTop()
+      },
+    })
+
+    // in-page anchors ride the smoother instead of jumping; 72px clears the
+    // fixed nav. #top (the wordmark) is the body element — scroll to 0.
+    document.querySelectorAll<HTMLAnchorElement>('a[href^="#"]').forEach((a) => {
+      const href = a.getAttribute('href')!
+      a.addEventListener('click', (e) => {
+        const live = ScrollSmoother.get()
+        if (!live) return // reduced-motion flipped mid-session — native behavior
+        if (href === '#top') {
+          e.preventDefault()
+          live.scrollTo(0, true)
+        } else if (href.length > 1 && document.querySelector(href)) {
+          e.preventDefault()
+          live.scrollTo(href, true, 'top 72px')
+          // preventDefault killed the browser's fragment-focus move — restore
+          // it so the skip link actually hands focus to #main
+          ;(document.querySelector(href) as HTMLElement | null)?.focus({ preventScroll: true })
+        }
+      })
+    })
+
+    // ---- hero entrance -------------------------------------------------
+    // the H1 is the LCP element: transform-only (it must paint immediately);
+    // everything else may fade in around it.
+    // opacity, never autoAlpha: visibility:hidden would prune content from
+    // the accessibility tree and tab order until scrolled (WCAG 2.1.1/1.3.1).
+    // opacity keeps everything present; the focusin completer below covers
+    // the focus-lands-on-invisible window.
+    gsap
+      .timeline({ defaults: { ease: 'power3.out', duration: 0.6 } })
+      .from('#hero .hero-kicker', { y: 14, opacity: 0 })
+      .from('#hero h1', { y: 20, duration: 0.8 }, '-=0.35')
+      .from('#hero .hero-copy', { y: 14, opacity: 0 }, '-=0.5')
+      .from('#hero .hero-ctas', { y: 12, opacity: 0 }, '-=0.4')
+      .from('#hero .hero-note', { opacity: 0 }, '-=0.35')
+      // the terminal peeks above the fold, so it enters with the hero — a
+      // scroll reveal would never fire (its start sits above scroll 0)
+      .from('#replay figure', { y: 32, opacity: 0, duration: 0.7 }, '-=0.3')
+
+    // ---- scroll reveals, per component ---------------------------------
+    // one vocabulary: rise 20-24px + fade, staggered by group, fired once at
+    // 'top 82%'. anything data-shaped (counters, the replay clock) is
+    // untouched — containers move, numbers never ease.
+    const rise = (
+      targets: string,
+      opts: { trigger?: string; stagger?: number; x?: number | ((i: number) => number); y?: number } = {},
+    ) => {
+      const els = gsap.utils.toArray<Element>(targets)
+      if (!els.length) return
+      gsap.from(els, {
+        y: opts.y ?? 24,
+        ...(opts.x !== undefined ? { x: opts.x, y: 0 } : {}),
+        opacity: 0,
+        duration: 0.7,
+        ease: 'power3.out',
+        stagger: opts.stagger ?? 0,
+        scrollTrigger: { trigger: opts.trigger ?? els[0], start: 'top 82%', once: true },
+      })
+    }
+
+    // section titles share one treatment (the replay-lead h2 lives inside a
+    // rising card and would double-animate — its card reveal covers it)
+    gsap.utils.toArray<Element>('main section h2').filter((h) => !h.closest('.rp-lead')).forEach((h) => {
+      gsap.from(h, {
+        y: 24,
+        opacity: 0,
+        duration: 0.7,
+        ease: 'power3.out',
+        scrollTrigger: { trigger: h, start: 'top 85%', once: true },
+      })
+    })
+
+    rise('#replay .rp-lead', { y: 28 })
+    rise('#problem .grid > div', { trigger: '#problem .grid', stagger: 0.12 })
+    rise('#bet h2 + figure', { y: 28 })
+    rise('#bet figure ~ p')
+    rise('#proof tbody tr', { trigger: '#proof table', stagger: 0.05, y: 16 })
+    rise('#proof table ~ p, #proof .overflow-x-auto ~ p')
+    rise('#architecture .grid > div', { trigger: '#architecture .grid', stagger: 0.15 })
+    rise('#memory .grid > div', { trigger: '#memory .grid', stagger: 0.08, y: 20 })
+    rise('#memory figure', { y: 32 })
+    rise('#coordination .grid > div:first-child > p', { trigger: '#coordination .grid', stagger: 0.12 })
+    rise('#coordination figure', { x: 32 })
+    rise('#build ol li', { trigger: '#build ol', stagger: 0.09 })
+    rise('#build ol ~ p')
+    rise('#studio figure', { trigger: '#studio .grid', x: (i) => (i % 2 ? 32 : -32), stagger: 0.1 })
+    rise('#mcp .grid > div', { trigger: '#mcp .grid', x: (i) => (i % 2 ? 32 : -32) })
+    rise('#start ol li', { trigger: '#start ol', stagger: 0.09, y: 20 })
+    rise('#limits li', { trigger: '#limits', stagger: 0.05, y: 14 })
+    rise('footer > div > *', { trigger: 'footer', stagger: 0.1, y: 16 })
+
+    // a11y: reveals fade opacity only, so unrevealed content stays in the
+    // tab order — which means keyboard focus CAN land on something still
+    // invisible (WCAG 2.4.7). when that happens, complete its reveal
+    // instantly (this also covers the wall-clock bar's clip-path window).
+    document.addEventListener('focusin', (e) => {
+      if (!(e.target instanceof Element)) return
+      for (const st of ScrollTrigger.getAll()) {
+        const a = st.animation
+        if (!a || a.progress() > 0) continue
+        const focused = e.target
+        const inTrigger = st.trigger instanceof Element && st.trigger.contains(focused)
+        const tw = a as gsap.core.Tween
+        const inTargets =
+          typeof tw.targets === 'function' &&
+          (tw.targets() as unknown[]).some((t) => t instanceof Element && t.contains(focused))
+        if (inTrigger || inTargets) a.progress(1)
+      }
+    })
+
+    // the wall-clock bar draws itself to scale — clip-path, not scaleX, so
+    // the label inside never distorts. the accent sliver lands with it.
+    const bar = document.querySelector('#wallclock-bar')
+    if (bar) {
+      gsap.fromTo(
+        bar,
+        { clipPath: 'inset(0 100% 0 0)' },
+        {
+          clipPath: 'inset(0 0% 0 0)',
+          duration: 1.1,
+          ease: 'power2.inOut',
+          scrollTrigger: { trigger: bar, start: 'top 80%', once: true },
+        },
+      )
+    }
+
+    return () => {
+      // matchMedia cleanup (e.g. user enables reduced motion live): kill the
+      // smoother and let native scrolling take back over. tweens/triggers
+      // created in this context are reverted by gsap automatically.
+      smoother.kill()
+      delete (window as unknown as { __lpScroll?: number }).__lpScroll
+    }
+  })
+</script>

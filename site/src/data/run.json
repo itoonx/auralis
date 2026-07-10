@@ -1,0 +1,595 @@
+{
+  "$schema": "auralis-run-export/v1",
+  "runId": "Auralis:analyze:2026-07-10T10:12:04.996Z",
+  "project": "Auralis",
+  "recordedAt": "2026-07-10T10:12:05.006Z",
+  "finishedAt": "2026-07-10T10:21:03.020Z",
+  "eventCount": 57,
+  "derived": {
+    "byKind": {
+      "phase": 4,
+      "intent": 4,
+      "trace": 36,
+      "finding": 4,
+      "overlap": 9
+    },
+    "verified": 4,
+    "warnings": 9,
+    "shares": 0,
+    "reworks": 0,
+    "overlapsFlagged": 9,
+    "workers": 4
+  },
+  "events": [
+    {
+      "seq": 6,
+      "t": 0,
+      "kind": "phase",
+      "actor": "planner",
+      "text": "━ plan · 4 task(s) · 2 level(s): claim-registry-data-model, worker-claim-lifecycle, race-and-recovery-handling, synthesis-claim-dedup-mechanism",
+      "node": null,
+      "parent": null,
+      "ts": "2026-07-10T10:12:05.006Z"
+    },
+    {
+      "seq": 7,
+      "t": 26,
+      "kind": "phase",
+      "actor": "conductor",
+      "text": "━ level 1/2 · 3 task(s)",
+      "node": null,
+      "parent": null,
+      "ts": "2026-07-10T10:12:05.032Z"
+    },
+    {
+      "seq": 8,
+      "t": 27,
+      "kind": "intent",
+      "actor": "claim-registry-data-model",
+      "text": "▸ claim-registry-data-model starting: Locate the claim registry implementation in this repo: what data structure or store backs",
+      "node": "claim-registry-data-model",
+      "parent": "[]",
+      "ts": "2026-07-10T10:12:05.033Z"
+    },
+    {
+      "seq": 9,
+      "t": 13770,
+      "kind": "trace",
+      "actor": "claim-registry-data-model",
+      "text": "» claim-registry-data-model → Grep claim",
+      "node": "claim-registry-data-model",
+      "parent": null,
+      "ts": "2026-07-10T10:12:18.776Z"
+    },
+    {
+      "seq": 10,
+      "t": 15719,
+      "kind": "trace",
+      "actor": "claim-registry-data-model",
+      "text": "» claim-registry-data-model → Grep ON CONFLICT|INSERT OR IGNORE|compare.?and.?swap|O_EXCL|flock|lockfile|wx",
+      "node": "claim-registry-data-model",
+      "parent": null,
+      "ts": "2026-07-10T10:12:20.725Z"
+    },
+    {
+      "seq": 11,
+      "t": 20961,
+      "kind": "trace",
+      "actor": "claim-registry-data-model",
+      "text": "» claim-registry-data-model → Read ~/Coding/Git/Auralis/src/claim.ts",
+      "node": "claim-registry-data-model",
+      "parent": null,
+      "ts": "2026-07-10T10:12:25.967Z"
+    },
+    {
+      "seq": 12,
+      "t": 31489,
+      "kind": "trace",
+      "actor": "claim-registry-data-model",
+      "text": "» claim-registry-data-model → Grep claim|resolveClaim",
+      "node": "claim-registry-data-model",
+      "parent": null,
+      "ts": "2026-07-10T10:12:36.495Z"
+    },
+    {
+      "seq": 13,
+      "t": 32617,
+      "kind": "trace",
+      "actor": "claim-registry-data-model",
+      "text": "» claim-registry-data-model → Grep claim|resolveClaim",
+      "node": "claim-registry-data-model",
+      "parent": null,
+      "ts": "2026-07-10T10:12:37.623Z"
+    },
+    {
+      "seq": 14,
+      "t": 44420,
+      "kind": "trace",
+      "actor": "claim-registry-data-model",
+      "text": "» claim-registry-data-model → Grep /api/claim",
+      "node": "claim-registry-data-model",
+      "parent": null,
+      "ts": "2026-07-10T10:12:49.426Z"
+    },
+    {
+      "seq": 15,
+      "t": 45013,
+      "kind": "trace",
+      "actor": "claim-registry-data-model",
+      "text": "» claim-registry-data-model → Read ~/Coding/Git/Auralis/test/claim.test.ts",
+      "node": "claim-registry-data-model",
+      "parent": null,
+      "ts": "2026-07-10T10:12:50.019Z"
+    },
+    {
+      "seq": 16,
+      "t": 54747,
+      "kind": "trace",
+      "actor": "claim-registry-data-model",
+      "text": "» claim-registry-data-model → Grep claim",
+      "node": "claim-registry-data-model",
+      "parent": null,
+      "ts": "2026-07-10T10:12:59.753Z"
+    },
+    {
+      "seq": 17,
+      "t": 55815,
+      "kind": "trace",
+      "actor": "claim-registry-data-model",
+      "text": "» claim-registry-data-model → Grep claim",
+      "node": "claim-registry-data-model",
+      "parent": null,
+      "ts": "2026-07-10T10:13:00.821Z"
+    },
+    {
+      "seq": 20,
+      "t": 87405,
+      "kind": "finding",
+      "actor": "claim-registry-data-model",
+      "text": "✓ claim-registry-data-model: I've located the full claim registry implementation. Here's the complete picture: ## Claim (6 files)",
+      "node": "claim-registry-data-model",
+      "parent": "[]",
+      "ts": "2026-07-10T10:13:32.411Z"
+    },
+    {
+      "seq": 21,
+      "t": 87413,
+      "kind": "intent",
+      "actor": "worker-claim-lifecycle",
+      "text": "▸ worker-claim-lifecycle starting: Trace how a parallel worker interacts with the claim registry during a read task: where in",
+      "node": "worker-claim-lifecycle",
+      "parent": "[]",
+      "ts": "2026-07-10T10:13:32.419Z"
+    },
+    {
+      "seq": 22,
+      "t": 110125,
+      "kind": "trace",
+      "actor": "worker-claim-lifecycle",
+      "text": "» worker-claim-lifecycle → Glob src/**/*.ts",
+      "node": "worker-claim-lifecycle",
+      "parent": null,
+      "ts": "2026-07-10T10:13:55.131Z"
+    },
+    {
+      "seq": 23,
+      "t": 110222,
+      "kind": "trace",
+      "actor": "worker-claim-lifecycle",
+      "text": "» worker-claim-lifecycle → Glob .claude/hooks/**",
+      "node": "worker-claim-lifecycle",
+      "parent": null,
+      "ts": "2026-07-10T10:13:55.228Z"
+    },
+    {
+      "seq": 24,
+      "t": 120488,
+      "kind": "trace",
+      "actor": "worker-claim-lifecycle",
+      "text": "» worker-claim-lifecycle → Read ~/Coding/Git/Auralis/src/fleet.ts",
+      "node": "worker-claim-lifecycle",
+      "parent": null,
+      "ts": "2026-07-10T10:14:05.494Z"
+    },
+    {
+      "seq": 25,
+      "t": 131827,
+      "kind": "trace",
+      "actor": "worker-claim-lifecycle",
+      "text": "» worker-claim-lifecycle → Read ~/Coding/Git/Auralis/src/runner.ts",
+      "node": "worker-claim-lifecycle",
+      "parent": null,
+      "ts": "2026-07-10T10:14:16.833Z"
+    },
+    {
+      "seq": 26,
+      "t": 132063,
+      "kind": "trace",
+      "actor": "worker-claim-lifecycle",
+      "text": "» worker-claim-lifecycle → Read ~/Coding/Git/Auralis/src/participants.ts",
+      "node": "worker-claim-lifecycle",
+      "parent": null,
+      "ts": "2026-07-10T10:14:17.069Z"
+    },
+    {
+      "seq": 27,
+      "t": 146053,
+      "kind": "trace",
+      "actor": "worker-claim-lifecycle",
+      "text": "» worker-claim-lifecycle → Grep claim",
+      "node": "worker-claim-lifecycle",
+      "parent": null,
+      "ts": "2026-07-10T10:14:31.059Z"
+    },
+    {
+      "seq": 28,
+      "t": 147057,
+      "kind": "trace",
+      "actor": "worker-claim-lifecycle",
+      "text": "» worker-claim-lifecycle → Grep claim|release|renew",
+      "node": "worker-claim-lifecycle",
+      "parent": null,
+      "ts": "2026-07-10T10:14:32.063Z"
+    },
+    {
+      "seq": 29,
+      "t": 163804,
+      "kind": "trace",
+      "actor": "worker-claim-lifecycle",
+      "text": "» worker-claim-lifecycle → Read ~/Coding/Git/Auralis/src/conductor.ts",
+      "node": "worker-claim-lifecycle",
+      "parent": null,
+      "ts": "2026-07-10T10:14:48.810Z"
+    },
+    {
+      "seq": 30,
+      "t": 221709,
+      "kind": "overlap",
+      "actor": "sentry",
+      "text": "⚠ claim-registry-data-model & worker-claim-lifecycle both touched claim",
+      "node": null,
+      "parent": null,
+      "ts": "2026-07-10T10:15:46.715Z"
+    },
+    {
+      "seq": 31,
+      "t": 221736,
+      "kind": "finding",
+      "actor": "worker-claim-lifecycle",
+      "text": "✓ worker-claim-lifecycle: I've traced the full worker↔claim-registry interaction. Building on the registry findings  (8 files)",
+      "node": "worker-claim-lifecycle",
+      "parent": "[]",
+      "ts": "2026-07-10T10:15:46.742Z"
+    },
+    {
+      "seq": 32,
+      "t": 221739,
+      "kind": "intent",
+      "actor": "race-and-recovery-handling",
+      "text": "▸ race-and-recovery-handling starting: Examine concurrency edge-case handling around the claim registry: how are simultaneous cla",
+      "node": "race-and-recovery-handling",
+      "parent": "[]",
+      "ts": "2026-07-10T10:15:46.745Z"
+    },
+    {
+      "seq": 33,
+      "t": 260414,
+      "kind": "trace",
+      "actor": "race-and-recovery-handling",
+      "text": "» race-and-recovery-handling → Read ~/Coding/Git/Auralis/oracle-lite/server.ts",
+      "node": "race-and-recovery-handling",
+      "parent": null,
+      "ts": "2026-07-10T10:16:25.420Z"
+    },
+    {
+      "seq": 34,
+      "t": 260876,
+      "kind": "trace",
+      "actor": "race-and-recovery-handling",
+      "text": "» race-and-recovery-handling → Glob test/**/*.ts",
+      "node": "race-and-recovery-handling",
+      "parent": null,
+      "ts": "2026-07-10T10:16:25.882Z"
+    },
+    {
+      "seq": 35,
+      "t": 262292,
+      "kind": "trace",
+      "actor": "race-and-recovery-handling",
+      "text": "» race-and-recovery-handling → Grep ttl|expire|stale|heartbeat|sweep|lease",
+      "node": "race-and-recovery-handling",
+      "parent": null,
+      "ts": "2026-07-10T10:16:27.298Z"
+    },
+    {
+      "seq": 36,
+      "t": 263367,
+      "kind": "trace",
+      "actor": "race-and-recovery-handling",
+      "text": "» race-and-recovery-handling → Grep duplicate|twice|overlap|already.?read|dedup",
+      "node": "race-and-recovery-handling",
+      "parent": null,
+      "ts": "2026-07-10T10:16:28.373Z"
+    },
+    {
+      "seq": 37,
+      "t": 275206,
+      "kind": "trace",
+      "actor": "race-and-recovery-handling",
+      "text": "» race-and-recovery-handling → Grep claim",
+      "node": "race-and-recovery-handling",
+      "parent": null,
+      "ts": "2026-07-10T10:16:40.212Z"
+    },
+    {
+      "seq": 38,
+      "t": 276393,
+      "kind": "trace",
+      "actor": "race-and-recovery-handling",
+      "text": "» race-and-recovery-handling → Grep duplicate|twice|overlap|claim",
+      "node": "race-and-recovery-handling",
+      "parent": null,
+      "ts": "2026-07-10T10:16:41.399Z"
+    },
+    {
+      "seq": 39,
+      "t": 289742,
+      "kind": "trace",
+      "actor": "race-and-recovery-handling",
+      "text": "» race-and-recovery-handling → Read ~/Coding/Git/Auralis/oracle-lite/server.ts",
+      "node": "race-and-recovery-handling",
+      "parent": null,
+      "ts": "2026-07-10T10:16:54.748Z"
+    },
+    {
+      "seq": 40,
+      "t": 290220,
+      "kind": "trace",
+      "actor": "race-and-recovery-handling",
+      "text": "» race-and-recovery-handling → Read ~/Coding/Git/Auralis/src/metrics.ts",
+      "node": "race-and-recovery-handling",
+      "parent": null,
+      "ts": "2026-07-10T10:16:55.226Z"
+    },
+    {
+      "seq": 41,
+      "t": 291629,
+      "kind": "trace",
+      "actor": "race-and-recovery-handling",
+      "text": "» race-and-recovery-handling → Grep claim|duplicate|redundant|race|concurrent",
+      "node": "race-and-recovery-handling",
+      "parent": null,
+      "ts": "2026-07-10T10:16:56.635Z"
+    },
+    {
+      "seq": 42,
+      "t": 292874,
+      "kind": "trace",
+      "actor": "race-and-recovery-handling",
+      "text": "» race-and-recovery-handling → Grep claim|duplicate|redundant|race|concurrent",
+      "node": "race-and-recovery-handling",
+      "parent": null,
+      "ts": "2026-07-10T10:16:57.880Z"
+    },
+    {
+      "seq": 43,
+      "t": 324733,
+      "kind": "trace",
+      "actor": "race-and-recovery-handling",
+      "text": "» race-and-recovery-handling → Read ~/Coding/Git/Auralis/src/memory.ts",
+      "node": "race-and-recovery-handling",
+      "parent": null,
+      "ts": "2026-07-10T10:17:29.739Z"
+    },
+    {
+      "seq": 44,
+      "t": 325673,
+      "kind": "trace",
+      "actor": "race-and-recovery-handling",
+      "text": "» race-and-recovery-handling → Read ~/Coding/Git/Auralis/test/coordinate.test.ts",
+      "node": "race-and-recovery-handling",
+      "parent": null,
+      "ts": "2026-07-10T10:17:30.679Z"
+    },
+    {
+      "seq": 45,
+      "t": 326795,
+      "kind": "trace",
+      "actor": "race-and-recovery-handling",
+      "text": "» race-and-recovery-handling → Grep claim",
+      "node": "race-and-recovery-handling",
+      "parent": null,
+      "ts": "2026-07-10T10:17:31.801Z"
+    },
+    {
+      "seq": 46,
+      "t": 350568,
+      "kind": "trace",
+      "actor": "race-and-recovery-handling",
+      "text": "» race-and-recovery-handling → Grep claim",
+      "node": "race-and-recovery-handling",
+      "parent": null,
+      "ts": "2026-07-10T10:17:55.574Z"
+    },
+    {
+      "seq": 49,
+      "t": 403392,
+      "kind": "overlap",
+      "actor": "sentry",
+      "text": "⚠ claim-registry-data-model & race-and-recovery-handling both touched claim",
+      "node": null,
+      "parent": null,
+      "ts": "2026-07-10T10:18:48.398Z"
+    },
+    {
+      "seq": 50,
+      "t": 403392,
+      "kind": "overlap",
+      "actor": "sentry",
+      "text": "⚠ claim-registry-data-model & race-and-recovery-handling both touched claim",
+      "node": null,
+      "parent": null,
+      "ts": "2026-07-10T10:18:48.398Z"
+    },
+    {
+      "seq": 51,
+      "t": 403392,
+      "kind": "overlap",
+      "actor": "sentry",
+      "text": "⚠ claim-registry-data-model & race-and-recovery-handling both touched claim",
+      "node": null,
+      "parent": null,
+      "ts": "2026-07-10T10:18:48.398Z"
+    },
+    {
+      "seq": 52,
+      "t": 403392,
+      "kind": "finding",
+      "actor": "race-and-recovery-handling",
+      "text": "✓ race-and-recovery-handling: All questions answered. Here is the complete picture of concurrency edge-case handling aro (10 files)",
+      "node": "race-and-recovery-handling",
+      "parent": "[]",
+      "ts": "2026-07-10T10:18:48.398Z"
+    },
+    {
+      "seq": 53,
+      "t": 403409,
+      "kind": "phase",
+      "actor": "conductor",
+      "text": "━ level 2/2 · 1 task(s)",
+      "node": null,
+      "parent": null,
+      "ts": "2026-07-10T10:18:48.415Z"
+    },
+    {
+      "seq": 54,
+      "t": 403410,
+      "kind": "intent",
+      "actor": "synthesis-claim-dedup-mechanism",
+      "text": "▸ synthesis-claim-dedup-mechanism starting: Combining the registry's data model and atomic acquisition primitive, the worker claim lif",
+      "node": "synthesis-claim-dedup-mechanism",
+      "parent": "[\"claim-registry-data-model\",\"worker-claim-lifecycle\",\"race-and-recovery-handling\"]",
+      "ts": "2026-07-10T10:18:48.416Z"
+    },
+    {
+      "seq": 55,
+      "t": 453508,
+      "kind": "trace",
+      "actor": "synthesis-claim-dedup-mechanism",
+      "text": "» synthesis-claim-dedup-mechanism → Read ~/Coding/Git/Auralis/src/claim.ts",
+      "node": "synthesis-claim-dedup-mechanism",
+      "parent": null,
+      "ts": "2026-07-10T10:19:38.514Z"
+    },
+    {
+      "seq": 56,
+      "t": 454438,
+      "kind": "trace",
+      "actor": "synthesis-claim-dedup-mechanism",
+      "text": "» synthesis-claim-dedup-mechanism → Read ~/Coding/Git/Auralis/src/memory.ts",
+      "node": "synthesis-claim-dedup-mechanism",
+      "parent": null,
+      "ts": "2026-07-10T10:19:39.444Z"
+    },
+    {
+      "seq": 57,
+      "t": 455504,
+      "kind": "trace",
+      "actor": "synthesis-claim-dedup-mechanism",
+      "text": "» synthesis-claim-dedup-mechanism → Read ~/Coding/Git/Auralis/src/runner.ts",
+      "node": "synthesis-claim-dedup-mechanism",
+      "parent": null,
+      "ts": "2026-07-10T10:19:40.510Z"
+    },
+    {
+      "seq": 58,
+      "t": 455981,
+      "kind": "trace",
+      "actor": "synthesis-claim-dedup-mechanism",
+      "text": "» synthesis-claim-dedup-mechanism → Read ~/Coding/Git/Auralis/oracle-lite/server.ts",
+      "node": "synthesis-claim-dedup-mechanism",
+      "parent": null,
+      "ts": "2026-07-10T10:19:40.987Z"
+    },
+    {
+      "seq": 59,
+      "t": 465162,
+      "kind": "trace",
+      "actor": "synthesis-claim-dedup-mechanism",
+      "text": "» synthesis-claim-dedup-mechanism → Read ~/Coding/Git/Auralis/src/fleet.ts",
+      "node": "synthesis-claim-dedup-mechanism",
+      "parent": null,
+      "ts": "2026-07-10T10:19:50.168Z"
+    },
+    {
+      "seq": 60,
+      "t": 537977,
+      "kind": "overlap",
+      "actor": "sentry",
+      "text": "⚠ claim-registry-data-model & synthesis-claim-dedup-mechanism both touched ~/Coding/Git/Auralis/src/claim.ts",
+      "node": null,
+      "parent": null,
+      "ts": "2026-07-10T10:21:02.983Z"
+    },
+    {
+      "seq": 61,
+      "t": 537979,
+      "kind": "overlap",
+      "actor": "sentry",
+      "text": "⚠ race-and-recovery-handling & synthesis-claim-dedup-mechanism both touched ~/Coding/Git/Auralis/src/memory.ts",
+      "node": null,
+      "parent": null,
+      "ts": "2026-07-10T10:21:02.985Z"
+    },
+    {
+      "seq": 62,
+      "t": 537979,
+      "kind": "overlap",
+      "actor": "sentry",
+      "text": "⚠ worker-claim-lifecycle & synthesis-claim-dedup-mechanism both touched ~/Coding/Git/Auralis/src/runner.ts",
+      "node": null,
+      "parent": null,
+      "ts": "2026-07-10T10:21:02.985Z"
+    },
+    {
+      "seq": 63,
+      "t": 537979,
+      "kind": "overlap",
+      "actor": "sentry",
+      "text": "⚠ race-and-recovery-handling & synthesis-claim-dedup-mechanism both touched ~/Coding/Git/Auralis/oracle-lite/server.ts",
+      "node": null,
+      "parent": null,
+      "ts": "2026-07-10T10:21:02.985Z"
+    },
+    {
+      "seq": 64,
+      "t": 537979,
+      "kind": "finding",
+      "actor": "synthesis-claim-dedup-mechanism",
+      "text": "✓ synthesis-claim-dedup-mechanism: All load-bearing details are now confirmed. Here is the end-to-end synthesis. *(Citation n (5 files)",
+      "node": "synthesis-claim-dedup-mechanism",
+      "parent": "[\"claim-registry-data-model\",\"worker-claim-lifecycle\",\"race-and-recovery-handling\"]",
+      "ts": "2026-07-10T10:21:02.985Z"
+    },
+    {
+      "seq": 65,
+      "t": 537980,
+      "kind": "overlap",
+      "actor": "sentry",
+      "text": "⚠ worker-claim-lifecycle & synthesis-claim-dedup-mechanism both touched ~/Coding/Git/Auralis/src/fleet.ts",
+      "node": null,
+      "parent": null,
+      "ts": "2026-07-10T10:21:02.986Z"
+    },
+    {
+      "seq": 66,
+      "t": 538014,
+      "kind": "phase",
+      "actor": "conductor",
+      "text": "━ run complete · reuses=4 repairs=0 overlaps=9 · live pulls=0/0 pushes=0 prevented=0 cites=0",
+      "node": null,
+      "parent": null,
+      "ts": "2026-07-10T10:21:03.020Z"
+    }
+  ]
+}

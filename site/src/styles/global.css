@@ -1,0 +1,96 @@
+@import "tailwindcss";
+@import "./tokens.css";
+
+/* Latin subsets only — the fontsource index.css would ship every unicode-range
+ * subset into dist (150KB vs 65KB budget). size-adjust'd fallbacks keep the
+ * terminal blocks from reflowing while the mono face loads. */
+@font-face {
+  font-family: "Geist Variable";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url("@fontsource-variable/geist/files/geist-latin-wght-normal.woff2") format("woff2-variations");
+}
+@font-face {
+  font-family: "Geist Mono Variable";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url("@fontsource-variable/geist-mono/files/geist-mono-latin-wght-normal.woff2") format("woff2-variations");
+}
+@font-face {
+  font-family: "Geist Mono Fallback";
+  src: local("Menlo");
+  size-adjust: 106%;
+}
+/* display serif — hero headline only (weights 300–700 via one variable axis) */
+@font-face {
+  font-family: "Cormorant Garamond Variable";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 300 700;
+  src: url("@fontsource-variable/cormorant-garamond/files/cormorant-garamond-latin-wght-normal.woff2") format("woff2-variations");
+}
+@font-face {
+  font-family: "Cormorant Garamond Variable";
+  font-style: italic;
+  font-display: swap;
+  font-weight: 300 700;
+  src: url("@fontsource-variable/cormorant-garamond/files/cormorant-garamond-latin-wght-italic.woff2") format("woff2-variations");
+}
+
+/* Landing design laws (plan §4): dark-only; grayscale base one step deeper
+ * than the studio; exactly ONE accent — "proof green" — reserved for proof
+ * (✓, CTA, prevented stamps, live cursor). Accent budget <5% per viewport. */
+:root {
+  color-scheme: dark;
+  --lp-bg: oklch(0.12 0 0);
+  --lp-surface: oklch(0.17 0 0);
+  --lp-surface-2: oklch(0.205 0 0);
+  --lp-border: oklch(1 0 0 / 10%);
+  --lp-fg: oklch(0.985 0 0);
+  --lp-muted: oklch(0.708 0 0);
+  --lp-accent: oklch(0.84 0.15 160);
+  --lp-accent-ink: oklch(0.145 0 0);
+  --lp-warn: oklch(0.82 0.14 80);
+  --lp-danger: oklch(0.704 0.191 22.216);
+}
+
+@theme inline {
+  --font-sans: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Cormorant Garamond Variable", Georgia, serif;
+  --font-mono: "Geist Mono Variable", "Geist Mono Fallback", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --color-lp-bg: var(--lp-bg);
+  --color-lp-surface: var(--lp-surface);
+  --color-lp-surface-2: var(--lp-surface-2);
+  --color-lp-border: var(--lp-border);
+  --color-lp-fg: var(--lp-fg);
+  --color-lp-muted: var(--lp-muted);
+  --color-lp-accent: var(--lp-accent);
+  --color-lp-accent-ink: var(--lp-accent-ink);
+}
+
+body {
+  background: var(--lp-bg);
+  color: var(--lp-fg);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* fragment jumps (no-JS, reduced-motion — cases the smooth-scroll offset
+ * never sees) still need to clear the fixed nav */
+section[id],
+header[id],
+main[id] {
+  scroll-margin-top: 4.5rem;
+}
+
+/* Motion law: decoration-time transitions only; data time is driven by the
+ * replay's virtual clock in JS. Nothing here eases a number. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

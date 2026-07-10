@@ -1,0 +1,320 @@
+---
+import Section from './Section.astro'
+---
+
+<Section id="memory" title="a living memory, not storage">
+  <!-- bento: 3+3 / 2+2+2 / wide. every diagram animates its power and is
+       decoration only (aria-hidden) — the copy carries the proof. base svg
+       state = the finished picture (reduced-motion / no-JS safe). -->
+  <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-6">
+    <div class="rounded-2xl border border-lp-border bg-lp-surface p-6 transition-colors hover:border-lp-muted/40 lg:col-span-3">
+      <div class="mb-5 text-lp-muted" aria-hidden="true">
+        <svg viewBox="0 0 300 96" class="h-28 w-full" fill="none" stroke-linecap="round">
+          <circle cx="52" cy="40" r="5" fill="currentColor" class="text-lp-fg" opacity=".85" />
+          <circle class="mm-ring" cx="52" cy="40" r="34" stroke="currentColor" stroke-width="1" />
+          <circle class="mm-ring mm-ring-2" cx="52" cy="40" r="34" stroke="currentColor" stroke-width="1" />
+          <text x="24" y="86" font-size="9" fill="currentColor" opacity=".55" font-family="var(--font-mono)">“sign-in flow”</text>
+          <circle class="mm-hit text-lp-accent" cx="238" cy="40" r="6" stroke="currentColor" stroke-width="1.5" />
+          <circle cx="238" cy="40" r="2.5" fill="currentColor" class="text-lp-accent" opacity=".9" />
+          <text x="164" y="86" font-size="9" fill="currentColor" opacity=".55" font-family="var(--font-mono)">“how do we authenticate”</text>
+        </svg>
+      </div>
+      <h3 class="font-mono text-sm text-lp-fg">▸ recall by meaning</h3>
+      <p class="mt-2 text-sm text-lp-muted">“sign-in flow” answers “how do we authenticate” — zero shared words.</p>
+    </div>
+
+    <div class="rounded-2xl border border-lp-border bg-lp-surface p-6 transition-colors hover:border-lp-muted/40 lg:col-span-3">
+      <div class="mb-5 text-lp-muted" aria-hidden="true">
+        <svg viewBox="0 0 300 96" class="h-28 w-full" fill="none" stroke-linecap="round">
+          <path class="mm-edge" d="M74 28 L 142 62" pathLength="1" stroke="currentColor" stroke-width="1.5" opacity=".55" />
+          <path class="mm-edge mm-edge-2" d="M226 28 L 158 62" pathLength="1" stroke="currentColor" stroke-width="1.5" opacity=".55" />
+          <circle cx="66" cy="24" r="6" stroke="currentColor" stroke-width="1.5" class="text-lp-fg" opacity=".75" />
+          <text x="36" y="12" font-size="9" fill="currentColor" opacity=".55" font-family="var(--font-mono)">SessionToken</text>
+          <circle cx="234" cy="24" r="6" stroke="currentColor" stroke-width="1.5" class="text-lp-fg" opacity=".75" />
+          <text x="206" y="12" font-size="9" fill="currentColor" opacity=".55" font-family="var(--font-mono)">login query</text>
+          <circle class="mm-node text-lp-accent" cx="150" cy="66" r="7" stroke="currentColor" stroke-width="1.5" />
+          <text x="112" y="90" font-size="9" fill="currentColor" opacity=".55" font-family="var(--font-mono)">auth/session.ts</text>
+        </svg>
+      </div>
+      <h3 class="font-mono text-sm text-lp-fg">▸ connect via graph</h3>
+      <p class="mt-2 text-sm text-lp-muted">a SessionToken finding reached a login query through a shared auth/session.ts node (recall 1 → 2).</p>
+    </div>
+
+    <div class="rounded-2xl border border-lp-border bg-lp-surface p-6 transition-colors hover:border-lp-muted/40 lg:col-span-2">
+      <div class="mb-5 text-lp-muted" aria-hidden="true">
+        <svg viewBox="0 0 180 80" class="h-24 w-full" fill="none" stroke-linecap="round">
+          <path d="M20 68 H 160" stroke="currentColor" stroke-width="1" opacity=".3" />
+          <rect x="34" y="34" width="16" height="34" rx="2" stroke="currentColor" stroke-width="1.5" opacity=".5" />
+          <rect class="mm-bar text-lp-accent" x="82" y="22" width="16" height="46" rx="2" stroke="currentColor" stroke-width="1.5" />
+          <rect x="130" y="48" width="16" height="20" rx="2" stroke="currentColor" stroke-width="1.5" opacity=".5" />
+          <circle class="mm-cite text-lp-accent" cx="90" cy="10" r="2.5" fill="currentColor" />
+          <text x="76" y="14" font-size="8" fill="currentColor" opacity=".55" font-family="var(--font-mono)" text-anchor="end">cite</text>
+        </svg>
+      </div>
+      <h3 class="font-mono text-sm text-lp-fg">▸ rank by earned trust</h3>
+      <p class="mt-2 text-sm text-lp-muted">usage counts only citations, so ranking can't self-reinforce its own winners. guardrail: trust may not override relevance.</p>
+    </div>
+
+    <div class="rounded-2xl border border-lp-border bg-lp-surface p-6 transition-colors hover:border-lp-muted/40 lg:col-span-2">
+      <div class="mb-5 text-lp-muted" aria-hidden="true">
+        <svg viewBox="0 0 180 80" class="h-24 w-full" fill="none" stroke-linecap="round">
+          <path d="M20 52 H 160" stroke="currentColor" stroke-width="1.5" opacity=".4" />
+          <path d="M30 46v12M150 46v12" stroke="currentColor" stroke-width="1.5" opacity=".5" />
+          <path d="M90 44v16" stroke="currentColor" stroke-width="1.5" class="text-lp-accent" opacity=".8" />
+          <text x="22" y="74" font-size="9" fill="currentColor" opacity=".55" font-family="var(--font-mono)">mar</text>
+          <text x="78" y="74" font-size="9" fill="currentColor" opacity=".7" font-family="var(--font-mono)" class="text-lp-accent">jun 1</text>
+          <text x="142" y="74" font-size="9" fill="currentColor" opacity=".55" font-family="var(--font-mono)">jul</text>
+          <g class="mm-when">
+            <circle cx="0" cy="52" r="4" fill="currentColor" class="text-lp-fg" opacity=".9" />
+          </g>
+          <text class="mm-t30" x="42" y="30" font-size="11" fill="currentColor" opacity=".8" font-family="var(--font-mono)">30s</text>
+          <text class="mm-t60" x="118" y="30" font-size="11" fill="currentColor" opacity=".8" font-family="var(--font-mono)">60s</text>
+        </svg>
+      </div>
+      <h3 class="font-mono text-sm text-lp-fg">▸ remember when</h3>
+      <p class="mt-2 text-sm text-lp-muted">as_of march returns march's answer: the timeout changed 30s → 60s on june 1 — each date gets its own truth.</p>
+    </div>
+
+    <div class="rounded-2xl border border-lp-border bg-lp-surface p-6 transition-colors hover:border-lp-muted/40 lg:col-span-2">
+      <div class="mb-5 text-lp-muted" aria-hidden="true">
+        <svg viewBox="0 0 180 80" class="h-24 w-full" fill="none" stroke-linecap="round">
+          <path d="M28 16 H 128" stroke="currentColor" stroke-width="2" class="text-lp-fg" opacity=".85" />
+          <path d="M140 10 v9M136.5 13 l3.5 -3.5 3.5 3.5" stroke="currentColor" stroke-width="1.5" class="text-lp-accent" opacity=".9" />
+          <path class="mm-decay" style="animation-delay:.4s" d="M28 32 H 118" stroke="currentColor" stroke-width="2" opacity=".55" />
+          <path class="mm-decay" style="animation-delay:.8s" d="M28 48 H 108" stroke="currentColor" stroke-width="2" opacity=".4" />
+          <path d="M20 60 H 160" stroke="currentColor" stroke-width="1" stroke-dasharray="3 4" opacity=".35" />
+          <text x="118" y="57" font-size="8" fill="currentColor" opacity=".5" font-family="var(--font-mono)">the floor</text>
+          <path class="mm-decay" style="animation-delay:1.2s" d="M28 70 H 96" stroke="currentColor" stroke-width="2" opacity=".18" />
+        </svg>
+      </div>
+      <h3 class="font-mono text-sm text-lp-fg">▸ forget without deleting</h3>
+      <p class="mt-2 text-sm text-lp-muted">strength decays, archives below the floor, decisions stay pinned — there is no delete route.</p>
+    </div>
+
+    <div class="rounded-2xl border border-lp-border bg-lp-surface p-6 transition-colors hover:border-lp-muted/40 sm:col-span-2 lg:col-span-6">
+      <div class="flex flex-col gap-5 sm:flex-row sm:items-center">
+        <div class="w-full shrink-0 text-lp-muted sm:w-72" aria-hidden="true">
+          <svg viewBox="0 0 280 72" class="h-20 w-full" fill="none" stroke-linecap="round">
+            <path d="M34 22a14 14 0 1 0 12 21 11 11 0 0 1-12-21z" stroke="currentColor" stroke-width="1.5" opacity=".6" />
+            <g class="mm-fact-old">
+              <rect x="80" y="24" width="58" height="24" rx="5" stroke="currentColor" stroke-width="1.5" opacity=".55" />
+              <text x="92" y="40" font-size="11" fill="currentColor" opacity=".7" font-family="var(--font-mono)">10min</text>
+              <path class="mm-strike" d="M84 36 H 134" pathLength="1" stroke="currentColor" stroke-width="1.5" opacity=".8" />
+            </g>
+            <g class="mm-fact-new text-lp-accent">
+              <rect x="156" y="24" width="58" height="24" rx="5" stroke="currentColor" stroke-width="1.5" />
+              <text x="168" y="40" font-size="11" fill="currentColor" font-family="var(--font-mono)">30min</text>
+            </g>
+            <text class="mm-reason" x="228" y="40" font-size="9" fill="currentColor" opacity=".55" font-family="var(--font-mono)">✓ reason</text>
+          </svg>
+        </div>
+        <div>
+          <h3 class="font-mono text-sm text-lp-fg">▸ sleep on it</h3>
+          <p class="mt-2 max-w-2xl text-sm text-lp-muted">a nightly job judges contradictions: a real 10min → 30min conflict was classified, the stale fact retired, the reason recorded.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- as_of time-travel: drag the date, the recalled answer flips — the real
+       fact pair from docs/proven.md. SSR shows both dates side by side (the
+       no-JS version); the slider highlights the one that was true "then". -->
+  <figure class="mt-12 overflow-hidden rounded-2xl border border-lp-border bg-lp-surface">
+    <div class="border-b border-lp-border px-4 py-2 font-mono text-xs text-lp-muted">
+      as_of time-travel · the recorded fact pair from docs/proven.md
+    </div>
+
+    <div id="asof-slider" hidden class="border-b border-lp-border px-4 py-4">
+      <label for="asof-range" class="block font-mono text-xs text-lp-muted">
+        query as_of <span id="asof-label" class="text-lp-fg">2026-03</span> — drag the date
+      </label>
+      <input
+        id="asof-range"
+        type="range"
+        min="0"
+        max="4"
+        step="1"
+        value="0"
+        class="mt-2 w-full accent-[oklch(0.84_0.15_160)]"
+      />
+      <div class="mt-1 flex justify-between font-mono text-[11px] text-lp-muted" aria-hidden="true">
+        <span>2026-03</span><span>jun 1 · fact changed</span><span>2026-07</span>
+      </div>
+    </div>
+
+    <div class="grid gap-0 font-mono text-[13px] sm:grid-cols-2">
+      <div id="asof-march" class="border-b border-lp-border p-4 transition-opacity sm:border-b-0 sm:border-r">
+        <div class="text-xs text-lp-muted">query as_of 2026-03</div>
+        <div class="mt-2 text-lp-fg"><span class="text-lp-accent">✓</span> timeout: 30s</div>
+        <div class="mt-1 text-xs text-lp-muted">the only answer that was true in march</div>
+      </div>
+      <div id="asof-july" class="p-4 transition-opacity">
+        <div class="text-xs text-lp-muted">query as_of 2026-07</div>
+        <div class="mt-2 text-lp-fg"><span class="text-lp-accent">✓</span> timeout: 60s</div>
+        <div class="mt-1 text-xs text-lp-muted"><s>30s</s> — superseded june 1, reason recorded</div>
+      </div>
+    </div>
+  </figure>
+</Section>
+
+<style>
+  /* recall — rings radiate from the query; the semantic match answers */
+  .mm-ring {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: mm-ring 3s ease-out infinite;
+  }
+  .mm-ring-2 {
+    animation-delay: 1.5s;
+  }
+  @keyframes mm-ring {
+    0% { transform: scale(0.15); opacity: 0.7; }
+    85%, 100% { transform: scale(1); opacity: 0; }
+  }
+  .mm-hit {
+    animation: mm-hit 3s ease-in-out infinite;
+    animation-delay: 1.1s;
+  }
+  @keyframes mm-hit {
+    0%, 100% { opacity: 0.5; }
+    20% { opacity: 1; }
+  }
+  /* graph — edges draw into the shared node, which lights up */
+  .mm-edge {
+    stroke-dasharray: 1;
+    animation: mm-edge 4s ease-in-out infinite;
+  }
+  .mm-edge-2 {
+    animation-delay: 0.5s;
+  }
+  @keyframes mm-edge {
+    0% { stroke-dashoffset: 1; }
+    30%, 85% { stroke-dashoffset: 0; }
+    100% { stroke-dashoffset: 0; opacity: 0.15; }
+  }
+  .mm-node {
+    animation: mm-node 4s ease-in-out infinite;
+  }
+  @keyframes mm-node {
+    0%, 20% { opacity: 0.35; }
+    45%, 85% { opacity: 1; }
+    100% { opacity: 0.35; }
+  }
+  /* trust — citations drop in, the cited bar earns its height */
+  .mm-cite {
+    animation: mm-cite 2.6s ease-in infinite;
+  }
+  @keyframes mm-cite {
+    0% { transform: translateY(-6px); opacity: 0; }
+    35% { transform: translateY(0); opacity: 1; }
+    55%, 100% { transform: translateY(8px); opacity: 0; }
+  }
+  .mm-bar {
+    transform-box: fill-box;
+    transform-origin: bottom;
+    animation: mm-bar 5.2s ease-in-out infinite;
+  }
+  @keyframes mm-bar {
+    0% { transform: scaleY(0.55); }
+    25% { transform: scaleY(0.7); }
+    50% { transform: scaleY(0.85); }
+    75%, 92% { transform: scaleY(1); }
+    100% { transform: scaleY(0.55); }
+  }
+  /* when — the query date slides; each side of jun 1 answers differently */
+  .mm-when {
+    animation: mm-when 6s ease-in-out infinite;
+  }
+  @keyframes mm-when {
+    0%, 18% { transform: translateX(48px); }
+    45%, 68% { transform: translateX(132px); }
+    95%, 100% { transform: translateX(48px); }
+  }
+  .mm-t30 {
+    animation: mm-t30 6s ease-in-out infinite;
+  }
+  @keyframes mm-t30 {
+    0%, 22% { opacity: 0.85; }
+    40%, 72% { opacity: 0.15; }
+    92%, 100% { opacity: 0.85; }
+  }
+  .mm-t60 {
+    animation: mm-t60 6s ease-in-out infinite;
+  }
+  @keyframes mm-t60 {
+    0%, 22% { opacity: 0.15; }
+    40%, 72% { opacity: 0.85; }
+    92%, 100% { opacity: 0.15; }
+  }
+  /* decay — unused memories sink toward the floor; the pinned line holds */
+  .mm-decay {
+    animation: mm-decay 4.4s ease-in-out infinite;
+  }
+  @keyframes mm-decay {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(2.5px); opacity: 0.12; }
+  }
+  /* sleep — the nightly judge retires the stale fact, reason recorded */
+  .mm-strike {
+    stroke-dasharray: 1;
+    animation: mm-strike 7s ease-in-out infinite;
+  }
+  @keyframes mm-strike {
+    0%, 30% { stroke-dashoffset: 1; }
+    45%, 90% { stroke-dashoffset: 0; }
+    100% { stroke-dashoffset: 1; }
+  }
+  .mm-fact-old {
+    animation: mm-fact-old 7s ease-in-out infinite;
+  }
+  @keyframes mm-fact-old {
+    0%, 40% { opacity: 1; }
+    55%, 90% { opacity: 0.45; }
+    100% { opacity: 1; }
+  }
+  .mm-fact-new {
+    animation: mm-fact-new 7s ease-in-out infinite;
+  }
+  @keyframes mm-fact-new {
+    0%, 40% { opacity: 0.55; }
+    55%, 90% { opacity: 1; }
+    100% { opacity: 0.55; }
+  }
+  .mm-reason {
+    animation: mm-reason 7s ease-in-out infinite;
+  }
+  @keyframes mm-reason {
+    0%, 50% { opacity: 0; }
+    62%, 90% { opacity: 0.7; }
+    100% { opacity: 0; }
+  }
+</style>
+
+<script>
+  // as_of slider — keyboard-operable (native range); the visible <label>
+  // provides the accessible name. the answer "flip" is an opacity crossfade
+  // ≤200ms (decoration time).
+  const wrap = document.getElementById('asof-slider')
+  const range = document.getElementById('asof-range') as HTMLInputElement | null
+  const label = document.getElementById('asof-label')
+  const march = document.getElementById('asof-march')
+  const july = document.getElementById('asof-july')
+  if (wrap && range && label && march && july) {
+    wrap.hidden = false
+    const months = ['2026-03', '2026-04', '2026-05', '2026-06', '2026-07']
+    const names = ['March 2026', 'April 2026', 'May 2026', 'June 2026', 'July 2026']
+    const apply = () => {
+      const i = Number(range.value)
+      label.textContent = months[i] ?? months[0]
+      range.setAttribute('aria-valuetext', names[i] ?? names[0])
+      // as_of returns only the answer that was true then — mirror that exactly:
+      // one card per date, not a dimmed pair (the timeout changed on june 1)
+      const after = i >= 3
+      march.hidden = after
+      july.hidden = !after
+      march.classList.toggle('sm:border-r', !after)
+    }
+    range.addEventListener('input', apply)
+    apply()
+  }
+</script>

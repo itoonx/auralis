@@ -1,0 +1,51 @@
+---
+import Section from './Section.astro'
+import { runData, fmtOffset } from '../lib/run'
+
+// The real sentry moment from the bundled run (kind: overlap), if recorded.
+const overlap = runData.events.find((e) => e.kind === 'overlap')
+---
+
+<Section id="coordination" title="prevented, not advised">
+  <div class="grid gap-10 lg:grid-cols-2">
+    <div class="flex flex-col gap-4 text-pretty text-lp-muted">
+      <p>
+        real-time advice isn't enough — an LLM can ignore it. so before a worker reads a file it
+        must <span class="font-mono text-lp-fg">claim</span> it. if a teammate owns it, the read is
+        blocked at the tool boundary and the worker is redirected to the existing finding.
+      </p>
+      <p>
+        deterministic, not persuasive: on a live 3-worker run this prevented
+        <b class="font-mono text-lp-fg">4 duplicate reads</b> before they happened — redundant
+        reads hit 0. the same gate, turned around, guards Write in build mode:
+        claim-on-write means <b class="font-mono text-lp-fg">no clobbers</b> (claim ON:
+        prevented-clobbers=1, collisions=0 · claim OFF: collisions=1).
+      </p>
+      <p>
+        around every task, the society works the brain: the Planner builds a dependency graph, the
+        Conductor pulls and pushes knowledge, the Sentry flags overlap live, and the Critic rejects
+        weak answers so a cut-off worker can't poison the memory.
+      </p>
+    </div>
+
+    <figure class="overflow-hidden rounded-md border border-lp-border bg-lp-surface">
+      <div class="border-b border-lp-border px-4 py-2 font-mono text-xs text-lp-muted">
+        the sentry, live — from the run recorded on this page
+      </div>
+      <div class="px-4 py-4 font-mono text-xs leading-6">
+        {overlap ? (
+          <>
+            <div class="text-lp-muted">{fmtOffset(overlap.t)} · {overlap.actor}</div>
+            <div class="mt-1 text-lp-accent">{overlap.text}</div>
+            <div class="mt-3 text-lp-muted">
+              two workers converged on the claim registry — flagged the moment it happened, not in
+              a post-mortem.
+            </div>
+          </>
+        ) : (
+          <div class="text-lp-muted">no overlap occurred in the bundled run — the assignment kept every file disjoint.</div>
+        )}
+      </div>
+    </figure>
+  </div>
+</Section>

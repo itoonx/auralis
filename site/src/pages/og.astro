@@ -1,0 +1,45 @@
+---
+// Not linked from anywhere: the 1200×630 source frame for public/og.png.
+// The social preview carries the same provenance as the page — a real replay
+// frame, real run id, real numbers. Regenerate the PNG after a data refresh.
+import '../styles/global.css'
+import { runData, fmtOffset, recordedDate, transcriptEvents } from '../lib/run'
+
+const events = transcriptEvents(7)
+const d = runData.derived
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="robots" content="noindex" />
+    <title>og frame</title>
+  </head>
+  <body>
+    <div id="og" class="flex h-[630px] w-[1200px] flex-col justify-between overflow-hidden bg-lp-bg p-14">
+      <div>
+        <p class="font-mono text-sm tracking-widest text-lp-muted">auralis · the coordination layer for agent fleets</p>
+        <p class="mt-4 max-w-4xl font-sans text-5xl font-medium lowercase leading-tight text-lp-fg">
+          the model isn't the bottleneck.<br />your shared state is.
+        </p>
+      </div>
+      <div class="rounded-md border border-lp-border bg-lp-surface">
+        <div class="flex justify-between border-b border-lp-border px-4 py-2 font-mono text-xs text-lp-muted">
+          <span>recorded {recordedDate} · {runData.eventCount} events · {d.workers} workers</span>
+          <span>measured, not asserted</span>
+        </div>
+        <ol class="px-4 py-2 font-mono text-xs leading-6">
+          {events.slice(0, 5).map((e) => (
+            <li class="truncate">
+              <span class="text-lp-muted">{fmtOffset(e.t)}</span>
+              <span class:list={['ml-3', e.kind === 'overlap' ? 'text-lp-accent' : e.kind === 'finding' ? 'text-lp-fg' : 'text-lp-muted']}>
+                {(e.text ?? '').slice(0, 110)}
+              </span>
+            </li>
+          ))}
+        </ol>
+      </div>
+    </div>
+  </body>
+</html>

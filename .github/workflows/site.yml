@@ -1,0 +1,70 @@
+name: site
+
+on:
+  push:
+    branches: [main]
+    paths: ['site/**', '.github/workflows/site.yml']
+  pull_request:
+    paths: ['site/**', '.github/workflows/site.yml']
+
+concurrency:
+  group: site-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: site
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          # astro 7 requires node >=22.12 (engines); 22 LTS covers astro 5-7
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: site/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      # design tokens must stay a verbatim copy of dashboard/src/index.css
+      - run: pnpm check-tokens
+      - run: pnpm check
+      # GitHub Pages project site — canonical/OG/sitemap bake these in; a
+      # future custom domain only needs these two values changed (plan §6)
+      - run: pnpm build
+        env:
+          SITE_URL: https://itoonx.github.io
+          SITE_BASE: /Auralis
+      # every proof number must exist as crawlable HTML text, never canvas-only
+      - name: proof numbers are static HTML
+        run: |
+          grep -q "99.9%" dist/index.html
+          grep -q "2.4ms" dist/index.html
+          grep -q "93.3%" dist/index.html
+          grep -q "−53%" dist/index.html
+      # hard byte budgets — regression fails the build
+      - run: node scripts/check-budget.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: site-dist
+          path: site/dist
+
+  deploy:
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { name: site-dist, path: dist }
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with: { path: dist }
+      - uses: actions/deploy-pages@v4
+        id: deployment

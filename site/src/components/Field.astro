@@ -1,0 +1,326 @@
+---
+// The ambient shared-state field — canvas + grid overlay, fixed behind the
+// whole page. Lives OUTSIDE #smooth-content on purpose: ScrollSmoother
+// transforms the content wrapper, and a transformed ancestor turns
+// position:fixed into position:absolute. Decoration only (aria-hidden,
+// pointer-events off); every number still lives in the replay section.
+---
+
+<!-- style opacity:0 (not a class): the script fades it to the class-driven
+     value after the first frame paints. safe for no-JS — an undrawn canvas
+     is transparent anyway. -->
+<canvas id="hero-field" class="pointer-events-none fixed inset-0 -z-10 h-full w-full opacity-70 lg:opacity-100" style="opacity:0" aria-hidden="true"></canvas>
+<div
+  class="pointer-events-none fixed inset-0 -z-10"
+  style="background-image:linear-gradient(to right,oklch(1 0 0 / 2.5%) 1px,transparent 1px),linear-gradient(to bottom,oklch(1 0 0 / 2.5%) 1px,transparent 1px);background-size:40px 40px;"
+  aria-hidden="true">
+</div>
+
+<script>
+  // hero field — a fleet of points held in one shared shape. Raw WebGL
+  // (no three.js: CDN r128 is ~150KB gz vs the 90KB external-JS budget).
+  // Decoration clock only: pauses off-screen/hidden; reduced motion gets a
+  // single static frame. Shaders are the reference's simplex-noise pair.
+  const cv = document.getElementById('hero-field') as HTMLCanvasElement | null
+  const gl = cv?.getContext('webgl', { alpha: true, antialias: true, powerPreference: 'low-power' }) ?? null
+
+  if (cv && gl) {
+    const NOISE = `
+    vec3 mod289(vec3 x){return x-floor(x*(1.0/289.0))*289.0;}
+    vec4 mod289(vec4 x){return x-floor(x*(1.0/289.0))*289.0;}
+    vec4 permute(vec4 x){return mod289(((x*34.0)+1.0)*x);}
+    vec4 taylorInvSqrt(vec4 r){return 1.79284291400159-0.85373472095314*r;}
+    float snoise(vec3 v){
+      const vec2 C=vec2(1.0/6.0,1.0/3.0);const vec4 D=vec4(0.0,0.5,1.0,2.0);
+      vec3 i=floor(v+dot(v,C.yyy));vec3 x0=v-i+dot(i,C.xxx);
+      vec3 g=step(x0.yzx,x0.xyz);vec3 l=1.0-g;vec3 i1=min(g.xyz,l.zxy);vec3 i2=max(g.xyz,l.zxy);
+      vec3 x1=x0-i1+C.xxx;vec3 x2=x0-i2+2.0*C.xxx;vec3 x3=x0-1.0+3.0*C.xxx;
+      i=mod289(i);
+      vec4 p=permute(permute(permute(i.z+vec4(0.0,i1.z,i2.z,1.0))+i.y+vec4(0.0,i1.y,i2.y,1.0))+i.x+vec4(0.0,i1.x,i2.x,1.0));
+      float n_=1.0/7.0;vec3 ns=n_*D.wyz-D.xzx;
+      vec4 j=p-49.0*floor(p*ns.z*ns.z);
+      vec4 x_=floor(j*ns.z);vec4 y_=floor(j-7.0*x_);
+      vec4 x=x_*ns.x+ns.yyyy;vec4 y=y_*ns.x+ns.yyyy;vec4 h=1.0-abs(x)-abs(y);
+      vec4 b0=vec4(x.xy,y.xy);vec4 b1=vec4(x.zw,y.zw);
+      vec4 s0=floor(b0)*2.0+1.0;vec4 s1=floor(b1)*2.0+1.0;vec4 sh=-step(h,vec4(0.0));
+      vec4 a0=b0.xzyw+s0.xzyw*sh.xxyy;vec4 a1=b1.xzyw+s1.xzyw*sh.zzww;
+      vec3 p0=vec3(a0.xy,h.x);vec3 p1=vec3(a0.zw,h.y);vec3 p2=vec3(a1.xy,h.z);vec3 p3=vec3(a1.zw,h.w);
+      vec4 norm=taylorInvSqrt(vec4(dot(p0,p0),dot(p1,p1),dot(p2,p2),dot(p3,p3)));
+      p0*=norm.x;p1*=norm.y;p2*=norm.z;p3*=norm.w;
+      vec4 m=max(0.6-vec4(dot(x0,x0),dot(x1,x1),dot(x2,x2),dot(x3,x3)),0.0);m=m*m;
+      return 42.0*dot(m*m,vec4(dot(p0,x0),dot(p1,x1),dot(p2,x2),dot(p3,x3)));
+    }`
+
+    const POINT_VS = `
+    attribute vec3 aPos;
+    uniform mat4 uP;
+    uniform mat4 uMV;
+    uniform float uTime;
+    uniform vec2 uMouse;
+    varying float vNoise;
+    varying float vDepth;
+    ${NOISE}
+    void main(){
+      vec3 pos=aPos;
+      float noise=snoise(vec3(pos.x*0.8+uTime*0.1,pos.y*0.8,pos.z*0.8));
+      vNoise=noise;
+      vec3 p=pos+normalize(pos)*noise*0.9;
+      // hover interaction (the reference's uMouse repel): points near the
+      // cursor bulge outward. uMouse arrives in view-space units at the
+      // sphere's depth, mv0.xy lives in the same space.
+      vec4 mv0=uMV*vec4(p,1.0);
+      float md=distance(uMouse,mv0.xy);
+      p+=normalize(pos)*smoothstep(4.0,0.0,md)*0.8;
+      vec4 mv=uMV*vec4(p,1.0);
+      gl_Position=uP*mv;
+      gl_PointSize=2.4*(24.0/-mv.z)*(1.0+noise*0.5);
+      vDepth=-mv.z;
+    }`
+
+    const POINT_FS = `
+    precision mediump float;
+    varying float vNoise;
+    varying float vDepth;
+    void main(){
+      vec2 c=gl_PointCoord-vec2(0.5);
+      float d=length(c);
+      if(d>0.5)discard;
+      float fog=exp(-pow(0.035*vDepth,2.0));
+      float a=smoothstep(0.5,0.2,d)*0.8*fog;
+      vec3 col=mix(vec3(0.29),vec3(0.98),vNoise*0.5+0.5);
+      gl_FragColor=vec4(col,a);
+    }`
+
+    const LINE_VS = `
+    attribute vec3 aPos;
+    uniform mat4 uP;
+    uniform mat4 uMV;
+    void main(){gl_Position=uP*uMV*vec4(aPos,1.0);}`
+
+    const LINE_FS = `
+    precision mediump float;
+    uniform vec4 uColor;
+    void main(){gl_FragColor=uColor;}`
+
+    const sh = (type: number, src: string) => {
+      const s = gl.createShader(type)!
+      gl.shaderSource(s, src)
+      gl.compileShader(s)
+      return s
+    }
+    const prog = (vs: string, fs: string) => {
+      const p = gl.createProgram()!
+      gl.attachShader(p, sh(gl.VERTEX_SHADER, vs))
+      gl.attachShader(p, sh(gl.FRAGMENT_SHADER, fs))
+      gl.linkProgram(p)
+      return p
+    }
+
+    // fibonacci sphere ≈ the reference icosphere as a point cloud
+    const N = 12000
+    const pts = new Float32Array(N * 3)
+    const GA = Math.PI * (3 - Math.sqrt(5))
+    for (let i = 0; i < N; i++) {
+      const y = 1 - (2 * i) / (N - 1)
+      const r = Math.sqrt(1 - y * y)
+      pts[i * 3] = Math.cos(GA * i) * r * 5
+      pts[i * 3 + 1] = y * 5
+      pts[i * 3 + 2] = Math.sin(GA * i) * r * 5
+    }
+    const SEG = 128
+    const ring = new Float32Array(SEG * 3)
+    for (let i = 0; i < SEG; i++) {
+      const a = (i / SEG) * Math.PI * 2
+      ring[i * 3] = Math.cos(a)
+      ring[i * 3 + 1] = Math.sin(a)
+    }
+
+    // column-major mat4 — the only three.js pieces the scene actually needs
+    type M = Float32Array
+    const mul = (a: M, b: M): M => {
+      const o = new Float32Array(16)
+      for (let c = 0; c < 4; c++)
+        for (let r = 0; r < 4; r++)
+          o[c * 4 + r] =
+            a[r] * b[c * 4] + a[4 + r] * b[c * 4 + 1] + a[8 + r] * b[c * 4 + 2] + a[12 + r] * b[c * 4 + 3]
+      return o
+    }
+    const persp = (fov: number, aspect: number, n: number, f: number): M => {
+      const t = 1 / Math.tan((fov * Math.PI) / 360)
+      return new Float32Array([t / aspect, 0, 0, 0, 0, t, 0, 0, 0, 0, (f + n) / (n - f), -1, 0, 0, (2 * f * n) / (n - f), 0])
+    }
+    const trans = (x: number, y: number, z: number): M =>
+      new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, x, y, z, 1])
+    const scaleM = (s: number): M => new Float32Array([s, 0, 0, 0, 0, s, 0, 0, 0, 0, s, 0, 0, 0, 0, 1])
+    const rotX = (a: number): M => {
+      const c = Math.cos(a), s = Math.sin(a)
+      return new Float32Array([1, 0, 0, 0, 0, c, s, 0, 0, -s, c, 0, 0, 0, 0, 1])
+    }
+    const rotY = (a: number): M => {
+      const c = Math.cos(a), s = Math.sin(a)
+      return new Float32Array([c, 0, -s, 0, 0, 1, 0, 0, s, 0, c, 0, 0, 0, 0, 1])
+    }
+    const rotZ = (a: number): M => {
+      const c = Math.cos(a), s = Math.sin(a)
+      return new Float32Array([c, s, 0, 0, -s, c, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1])
+    }
+
+    const pp = prog(POINT_VS, POINT_FS)
+    const lp = prog(LINE_VS, LINE_FS)
+    const pBuf = gl.createBuffer()
+    gl.bindBuffer(gl.ARRAY_BUFFER, pBuf)
+    gl.bufferData(gl.ARRAY_BUFFER, pts, gl.STATIC_DRAW)
+    const lBuf = gl.createBuffer()
+    gl.bindBuffer(gl.ARRAY_BUFFER, lBuf)
+    gl.bufferData(gl.ARRAY_BUFFER, ring, gl.STATIC_DRAW)
+
+    const pPos = gl.getAttribLocation(pp, 'aPos')
+    const pU = { P: gl.getUniformLocation(pp, 'uP'), MV: gl.getUniformLocation(pp, 'uMV'), time: gl.getUniformLocation(pp, 'uTime'), mouse: gl.getUniformLocation(pp, 'uMouse') }
+    const lPos = gl.getAttribLocation(lp, 'aPos')
+    const lU = { P: gl.getUniformLocation(lp, 'uP'), MV: gl.getUniformLocation(lp, 'uMV'), color: gl.getUniformLocation(lp, 'uColor') }
+
+    // radius, tiltX, tiltY — the reference's three thin orbits
+    const ORBITS: Array<[number, number, number]> = [
+      [6.0, Math.PI / 2, 0],
+      [5.8, Math.PI / 3, Math.PI / 6],
+      [6.5, Math.PI / 1.8, Math.PI / 4],
+    ]
+
+    let g = { x: 6, y: 1.5, z: 0, s: 1 }
+    const layout = () => {
+      // mobile: further + higher so body copy never sits on dense dots
+      g = window.innerWidth < 1024 ? { x: 0, y: 6.5, z: -8, s: 0.8 } : { x: 6.5, y: 0.5, z: 0, s: 0.85 }
+    }
+
+    // hover only bulges nearby points — the camera itself never moves.
+    // mouseSeen gate: before any real mousemove the phantom target would be
+    // (0,0) — the view center — and the smoothed cursor would sweep in from
+    // off-scene straight through the sphere on every load, reading as a
+    // hover ripple nobody caused. touch devices never fire it at all.
+    let mx = 0, my = 0, smx = 99, smy = 99
+    let mouseSeen = false, mouseSnapped = false
+    window.addEventListener('mousemove', (e) => {
+      mouseSeen = true
+      mx = (e.clientX / window.innerWidth) * 2 - 1
+      my = -(e.clientY / window.innerHeight) * 2 + 1
+    })
+    // the reference's scroll float: the sphere rises as the page scrolls.
+    // ScrollSmoother (when active) publishes its smoothed position on
+    // window.__lpScroll so the field drifts in sync with the eased content,
+    // not the raw scrollbar; fallback is native scrollY.
+    const scrollPos = () => ((window as unknown as { __lpScroll?: number }).__lpScroll ?? window.scrollY) || 0
+
+    const draw = (t: number) => {
+      gl.viewport(0, 0, cv.width, cv.height)
+      gl.clearColor(0, 0, 0, 0)
+      gl.clear(gl.COLOR_BUFFER_BIT)
+      gl.enable(gl.BLEND)
+      gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
+
+      const P = persp(50, cv.width / Math.max(1, cv.height), 0.1, 100)
+      const view = trans(0, 0, -18)
+      const model = mul(trans(g.x, g.y + scrollPos() * 0.002, g.z), mul(rotY(t * 0.05), mul(rotZ(Math.sin(t * 0.1) * 0.05), scaleM(g.s))))
+
+      gl.useProgram(pp)
+      gl.bindBuffer(gl.ARRAY_BUFFER, pBuf)
+      gl.enableVertexAttribArray(pPos)
+      gl.vertexAttribPointer(pPos, 3, gl.FLOAT, false, 0, 0)
+      gl.uniformMatrix4fv(pU.P, false, P)
+      gl.uniformMatrix4fv(pU.MV, false, mul(view, model))
+      gl.uniform1f(pU.time, t)
+      gl.uniform2f(pU.mouse, smx, smy)
+      gl.drawArrays(gl.POINTS, 0, N)
+
+      gl.useProgram(lp)
+      gl.bindBuffer(gl.ARRAY_BUFFER, lBuf)
+      gl.enableVertexAttribArray(lPos)
+      gl.vertexAttribPointer(lPos, 3, gl.FLOAT, false, 0, 0)
+      gl.uniformMatrix4fv(lU.P, false, P)
+      gl.uniform4f(lU.color, 0.71, 0.71, 0.71, 0.15)
+      const wob = rotX(Math.sin(t * 0.05) * 0.2)
+      ORBITS.forEach(([r, rx, ry], i) => {
+        const om = mul(model, mul(wob, mul(rotX(rx), mul(rotY(ry), mul(rotZ(t * 0.13 * (i + 1)), scaleM(r))))))
+        gl.uniformMatrix4fv(lU.MV, false, mul(view, om))
+        gl.drawArrays(gl.LINE_LOOP, 0, SEG)
+      })
+    }
+
+    let tt = 0
+    let raf = 0
+    let running = false
+    const frame = () => {
+      tt += 0.015
+      // cursor → view-space units at the sphere's depth plane (z=18, fov 50)
+      const hh = Math.tan((25 * Math.PI) / 180) * 18
+      const hw = hh * (cv.width / Math.max(1, cv.height))
+      if (mouseSeen) {
+        // first real move snaps (no off-scene sweep through the sphere);
+        // afterwards the usual 0.08 lerp trails the cursor
+        if (!mouseSnapped) {
+          mouseSnapped = true
+          smx = mx * hw
+          smy = my * hh
+        } else {
+          smx += (mx * hw - smx) * 0.08
+          smy += (my * hh - smy) * 0.08
+        }
+      }
+      draw(tt)
+      raf = requestAnimationFrame(frame)
+    }
+    const start = () => {
+      if (!running) {
+        running = true
+        raf = requestAnimationFrame(frame)
+      }
+    }
+    const stop = () => {
+      running = false
+      cancelAnimationFrame(raf)
+    }
+
+    const size = () => {
+      const dpr = Math.min(window.devicePixelRatio || 1, 2)
+      cv.width = Math.max(1, Math.round(cv.clientWidth * dpr))
+      cv.height = Math.max(1, Math.round(cv.clientHeight * dpr))
+      layout()
+      if (!running) draw(tt)
+    }
+
+    size()
+    draw(0)
+
+    // fade-in on load: the first frame is already drawn at opacity 0; two
+    // rAFs later (so the 0 state has actually painted) ease up to the
+    // class-driven opacity (70 mobile / 100 desktop). the global
+    // reduced-motion rule collapses the transition to instant.
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        cv.style.transition = 'opacity 1.6s ease-out'
+        cv.style.opacity = ''
+      }),
+    )
+
+    if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      // cv is fixed (always "in view") — gate on the hero section instead,
+      // with margin so the float keeps moving while the field still peeks
+      // through the veiled sections just below. The canvas no longer lives
+      // inside the header (ScrollSmoother restructure), so look it up by id.
+      const hero = document.getElementById('hero') ?? cv
+      let inView = false
+      new IntersectionObserver(
+        (entries) => {
+          inView = entries[entries.length - 1].isIntersecting
+          if (inView && !document.hidden) start()
+          else stop()
+        },
+        { rootMargin: '50% 0px 50% 0px' },
+      ).observe(hero)
+      document.addEventListener('visibilitychange', () => {
+        if (document.hidden) stop()
+        else if (inView) start()
+      })
+      window.addEventListener('resize', size)
+    }
+  }
+</script>
