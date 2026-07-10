@@ -192,9 +192,15 @@
       g = window.innerWidth < 1024 ? { x: 0, y: 6.5, z: -8, s: 0.8 } : { x: 6.5, y: 0.5, z: 0, s: 0.85 }
     }
 
-    // hover only bulges nearby points — the camera itself never moves
+    // hover only bulges nearby points — the camera itself never moves.
+    // mouseSeen gate: before any real mousemove the phantom target would be
+    // (0,0) — the view center — and the smoothed cursor would sweep in from
+    // off-scene straight through the sphere on every load, reading as a
+    // hover ripple nobody caused. touch devices never fire it at all.
     let mx = 0, my = 0, smx = 99, smy = 99
+    let mouseSeen = false, mouseSnapped = false
     window.addEventListener('mousemove', (e) => {
+      mouseSeen = true
       mx = (e.clientX / window.innerWidth) * 2 - 1
       my = -(e.clientY / window.innerHeight) * 2 + 1
     })
@@ -247,8 +253,18 @@
       // cursor → view-space units at the sphere's depth plane (z=18, fov 50)
       const hh = Math.tan((25 * Math.PI) / 180) * 18
       const hw = hh * (cv.width / Math.max(1, cv.height))
-      smx += (mx * hw - smx) * 0.08
-      smy += (my * hh - smy) * 0.08
+      if (mouseSeen) {
+        // first real move snaps (no off-scene sweep through the sphere);
+        // afterwards the usual 0.08 lerp trails the cursor
+        if (!mouseSnapped) {
+          mouseSnapped = true
+          smx = mx * hw
+          smy = my * hh
+        } else {
+          smx += (mx * hw - smx) * 0.08
+          smy += (my * hh - smy) * 0.08
+        }
+      }
       draw(tt)
       raf = requestAnimationFrame(frame)
     }
