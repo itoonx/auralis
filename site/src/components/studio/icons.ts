@@ -18,4 +18,13 @@ export const ICON: Record<string, string> = {
   tool: '<path d="m7 6 6 6-6 6M13 6l6 6-6 6"/>',
   finding: '<path d="m4 12.5 5.5 5.5L20 7"/>',
   overlap: '<path d="M12 3 2.5 20h19zM12 9.5V14M12 16.8v.4"/>',
+  // browser-chrome glyphs
+  back: '<path d="M15 18l-6-6 6-6"/>',
+  forward: '<path d="M9 18l6-6-6-6"/>',
+  reload: '<path d="M3 12a9 9 0 1 0 2.6-6.4L3 8"/><path d="M3 3v5h5"/>',
+  info: '<circle cx="12" cy="12" r="9"/><path d="M12 16v-4M12 8h.01"/>',
+  star: '<path d="m12 3 2.9 5.9 6.1.9-4.4 4.3 1 6.1-5.6-2.9-5.6 2.9 1-6.1L3 9.8l6.1-.9z"/>',
+  menu: '<path d="M4 6h16M4 12h16M4 18h16"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  x: '<path d="M6 6l12 12M18 6L6 18"/>',
 }
