@@ -56,6 +56,31 @@ const steps = [
       </li>
     ))}
   </ol>
+  <!-- the two questions every adopter asks before running step 1 — answered
+       from the code, not marketing: fleet.ts (planner/workers are Claude Code
+       sessions), oracle-lite/server.ts (binds 127.0.0.1), platform.md (local
+       embeddings). inline <span>s stay on one line with spaces on both sides —
+       the minifier eats newline-only gaps next to tags -->
+  <div class="mt-10 grid gap-4 sm:grid-cols-2">
+    <div class="rounded-2xl border border-lp-border bg-lp-surface p-6 transition-colors hover:border-lp-muted/40">
+      <h3 class="font-mono text-sm text-lp-fg">▸ what it costs</h3>
+      <p class="mt-2 text-pretty text-sm leading-6 text-lp-muted">
+        no API key, no second subscription: the planner and every worker are plain Claude Code
+        sessions on the login you already have — a fleet run spends that login's usage, and the
+        spend scales with the workers you ask for. coordination itself (<span class="font-mono text-lp-fg">claim · learn · search</span>) is
+        local HTTP at ~2.4ms per event, not extra model calls.
+      </p>
+    </div>
+    <div class="rounded-2xl border border-lp-border bg-lp-surface p-6 transition-colors hover:border-lp-muted/40">
+      <h3 class="font-mono text-sm text-lp-fg">▸ where your code goes</h3>
+      <p class="mt-2 text-pretty text-sm leading-6 text-lp-muted">
+        the brain is a SQLite file on your disk (plus an optional local vector index) and it binds
+        to <span class="font-mono text-lp-fg">127.0.0.1</span> only; embeddings are computed
+        locally. nothing leaves your machine beyond what your agents already send to the model —
+        no telemetry, no analytics. sharing the studio is an explicit <span class="font-mono text-lp-fg">--share</span> opt-in.
+      </p>
+    </div>
+  </div>
   <p class="mt-8 text-pretty text-sm text-lp-muted">
     point auralis at a repository and a society of agents analyses it together; point it at an
     empty folder and they build one — the same coordination either way.
