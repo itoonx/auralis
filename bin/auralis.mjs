@@ -8,9 +8,11 @@
 //   auralis status              services + health + brain stats
 //   auralis logs [svc] [-f]     compose logs
 //   auralis restart [svc]
-//   auralis doctor              docker? compose file? ports? brain reachable? token?
+//   auralis backup [--install|--uninstall]   WAL-safe brain snapshot; --install schedules it daily
+//   auralis doctor              docker? compose file? ports? brain reachable? token? reboot-ready?
 import { execSync, spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, unlinkSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -32,6 +34,57 @@ const composeJson = () => {
 const health = async (base = ORACLE) => {
   try { return (await fetch(`${base}/health`, { signal: AbortSignal.timeout(2000) })).ok; } catch { return false; }
 };
+
+// -- backup: WAL-safe brain snapshots (Supabase-style) -------------------------------------------------
+// SEPARATE from the server's /api/snapshot 5-slot pre-mutation safety net: this is the periodic backup,
+// its own dir + retention so daily copies are never evicted by pre-sleep snapshots.
+const DAILY_DIR = join(ROOT, ".auralis-out", "backups", "daily");
+const DAILY_KEEP = 14;
+const PLIST = join(homedir(), "Library", "LaunchAgents", "dev.auralis.backup.plist");
+const BRAIN = join(ROOT, ".auralis-out", "brain.sqlite");
+
+function backup() {
+  if (!existsSync(BRAIN)) return fail(`brain not found: ${BRAIN}`);
+  mkdirSync(DAILY_DIR, { recursive: true });
+  const ts = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19); // 2026-07-10T11-50-00
+  const out = join(DAILY_DIR, `brain-${ts}.db`);
+  // WAL-safe: SQLite's online-backup API via the sqlite3 CLI — NOT `cp` (a raw copy of a live WAL'd db
+  // corrupts; found live while a daemon held it open). LanceDB vectors are re-derivable by re-embedding
+  // the docs, so the sqlite brain (source of truth) IS the whole backup.
+  if (sh(["sqlite3", BRAIN, `.backup ${out}`]).status !== 0 || !existsSync(out)) return fail("sqlite3 .backup failed");
+  const kept = readdirSync(DAILY_DIR).filter((f) => /^brain-.*\.db$/.test(f)).sort(); // ISO names sort chronologically
+  for (const f of kept.slice(0, -DAILY_KEEP)) unlinkSync(join(DAILY_DIR, f)); // prune oldest beyond KEEP
+  console.log(`✓ backup → ${out}  (${Math.min(kept.length, DAILY_KEEP)} kept, max ${DAILY_KEEP})`);
+}
+
+function installSchedule() {
+  // No cron on stock macOS → launchd. Absolute paths only (LaunchAgents run with a minimal PATH).
+  const plist = `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Label</key><string>dev.auralis.backup</string>
+  <key>ProgramArguments</key><array>
+    <string>${process.execPath}</string>
+    <string>${join(ROOT, "bin", "auralis.mjs")}</string>
+    <string>backup</string>
+  </array>
+  <key>StartCalendarInterval</key><dict><key>Hour</key><integer>4</integer><key>Minute</key><integer>0</integer></dict>
+  <key>StandardOutPath</key><string>${join(ROOT, ".auralis-out", "backups", "backup.log")}</string>
+  <key>StandardErrorPath</key><string>${join(ROOT, ".auralis-out", "backups", "backup.log")}</string>
+</dict></plist>
+`;
+  mkdirSync(dirname(PLIST), { recursive: true });
+  writeFileSync(PLIST, plist);
+  sh(["launchctl", "unload", PLIST], { stdio: "ignore" }); // idempotent reinstall
+  if (sh(["launchctl", "load", PLIST]).status !== 0) return fail("launchctl load failed");
+  console.log(`✓ daily backup scheduled 04:00 → ${PLIST}`);
+}
+
+function uninstallSchedule() {
+  sh(["launchctl", "unload", PLIST], { stdio: "ignore" });
+  if (existsSync(PLIST)) unlinkSync(PLIST);
+  console.log("✓ daily backup schedule removed");
+}
 
 async function start() {
   const share = rest.includes("--share");
@@ -74,12 +127,16 @@ async function status() {
 }
 
 async function doctor() {
+  const orbLogin = (() => { try { return execSync("orb config get app.start_at_login", { encoding: "utf8" }).trim() === "true"; } catch { return false; } })();
   const checks = [];
   checks.push(["docker", sh(["docker", "--version"], { stdio: "ignore" }).status === 0]);
   checks.push(["compose file", existsSync(join(ROOT, "docker-compose.yml"))]);
   checks.push(["dashboard dist", existsSync(join(ROOT, "dashboard/dist/index.html"))]);
   checks.push(["oracle reachable", await health()]);
   checks.push(["token set", !!process.env.ORACLE_TOKEN]);
+  checks.push(["reboot: orbstack start-at-login", orbLogin]);
+  checks.push(["backup: sqlite3 present", sh(["sqlite3", "--version"], { stdio: "ignore" }).status === 0]);
+  checks.push(["backup: daily schedule installed", existsSync(PLIST)]);
   for (const [name, ok] of checks) console.log(`  ${ok ? "✅" : "✗"} ${name}`);
   const critical = checks.slice(0, 2).every(([, ok]) => ok);
   if (!critical) fail("docker or compose file missing");
@@ -93,6 +150,11 @@ switch (cmd) {
   case "status": await status(); break;
   case "restart": compose("restart", ...rest.filter((a) => !a.startsWith("-"))); break;
   case "logs": compose("logs", ...rest); break;
+  case "backup":
+    if (rest.includes("--install")) installSchedule();
+    else if (rest.includes("--uninstall")) uninstallSchedule();
+    else backup();
+    break;
   case "doctor": await doctor(); break;
   default:
     console.log("auralis — production stack CLI\n");
@@ -101,6 +163,8 @@ switch (cmd) {
     console.log("  auralis status            services + brain stats");
     console.log("  auralis logs [svc] [-f]   service logs");
     console.log("  auralis restart [svc]");
-    console.log("  auralis doctor            environment checks");
+    console.log("  auralis backup            WAL-safe brain snapshot now (keeps last 14)");
+    console.log("  auralis backup --install  schedule a daily backup (launchd, 04:00)");
+    console.log("  auralis doctor            environment + reboot/backup readiness");
     process.exit(cmd ? 1 : 0);
 }
