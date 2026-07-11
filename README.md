@@ -21,13 +21,37 @@ When you run *many* agents on one codebase, the model isn't the bottleneck — *
 Agents re-read the same files, redo each other's work, overwrite each other's changes, and forget
 everything between sessions. auralis fixes the state, not the model.
 
+## Benchmarks
+
+**The memory layer vs the alternatives** — LongMemEval (90 questions, ~120k-token histories), controlled
+A/B: same reader, same judge, only the memory layer varies:
+
+| memory layer | answer accuracy | context per question |
+|---|---|---|
+| **auralis brain** | **93.3%** | **~9.6k tokens** |
+| entire history in the context window | 90.0% | ~124k tokens — **12.9× more** |
+| grep the history (top-96 lines) | 60.0% | ~9.6k tokens |
+
+→ full-context quality at **a thirteenth of the tokens** — and it still works when the history
+*outgrows* the context window, which is the point.
+
+**Retrieval quality** — paraphrase-hard set (the query shares no words with the memory), recall@10:
+
+| lexical search | + BGE-M3 semantic | + cross-encoder rerank |
+|---|---|---|
+| ~0% | 88% | **96%** |
+
+**Ranking** — earned trust + citations vs plain relevance: precision@1 **25% → 75%**.
+
+<sub>Controlled single-run measurements on our own instrument (internal judge, identical across arms) —
+methodology, caveats, and every other number: [docs/proven.md](docs/proven.md). We don't quote
+cross-system leaderboard comparisons; different readers/judges make them theatre.</sub>
+
 ## Measured, not asserted
 
-Every number below is from a live run — full receipts in **[docs/proven.md](docs/proven.md)**:
+More from live runs — full receipts in **[docs/proven.md](docs/proven.md)**:
 
 - **−53% redundant work** across a 3-task fleet run; duplicate work *prevented* by design, not advised away
-- **Paraphrase recall ~0% → 96%** — BGE-M3 semantic recall + cross-encoder reranking
-- **Ranking A/B: 25% → 75%** precision@1 — trust and citations that memories *earn*
 - **Time-travel recall** — ask "what was the timeout *in March*?" and get March's answer (`as_of`)
 - Real multi-file programs **built and verified first-try** (REST API, expression evaluator), reworked automatically on failure
 - A **sleep job** caught a real contradiction, judged it, and retired the stale fact — with the reason recorded
