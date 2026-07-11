@@ -92,6 +92,7 @@ inside this repo your session is also captured into the same brain: **[docs/mcp.
 
 | Doc | What's in it |
 |---|---|
+| [docs/getting-started.md](docs/getting-started.md) | **the full walkthrough** — install, auth, semantic recall, wiring your Claude Code CLI in, troubleshooting |
 | [docs/platform.md](docs/platform.md) | why a platform, the four pillars in depth, build mode |
 | [docs/proven.md](docs/proven.md) | every claim, measured on live runs |
 | [docs/mcp.md](docs/mcp.md) | MCP tools from Claude Code · session capture (ingress design) |
