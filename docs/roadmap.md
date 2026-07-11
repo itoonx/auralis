@@ -2,10 +2,14 @@
 
 Where the platform is headed. Ordered by leverage (timing tells us which knob actually moves the needle).
 
-> **Active phase (2026-07-10):** `docs/prd-fix-recall.md` — the P4 official number is 53.4% (below
-> full-context) and 84% of losses are RETRIEVAL-recall, not the reader. Fix the semantic instrument, build a
-> controlled memory-vs-full-context delta, then close recall on paraphrase / aggregation / temporal.
-> Prior phase `docs/prd-next-phase.md` (M1–M6 + P4) is done — its embedder "closed" verdict is retracted there.
+> **State (2026-07-12):** the semantic stack SHIPPED to production — BGE-M3 dense via the python
+> bge-sidecar (launchd, KeepAlive) + opt-in cross-encoder rerank (`rerank=1`) + 2-plane API auth
+> (JWT/token, `.env.oracle`). Ground-truth LME probe (subset50, 100% semantic engagement verified):
+> evidence-chunk@48 88→93%, preference 33→67%, assistant@12 67→83%. **M4 aggregation is DROPPED**
+> (premise refuted by the R3 probe; triggers to reopen recorded in `docs/prd-next-phase.md` §M4).
+> Next gates: the answer-stage A/B when LLM credit returns (one evening — it is also M4's reopen
+> test), and production mileage on the new stack. Prior notes: the P4 official number 53.4% predates
+> this stack; `docs/prd-fix-recall.md` closed at 93.3% internal (subset90).
 
 - **Memory-OS upgrades — complete (U1–U7), all shipped and measured** (`docs/research-memory-os.md`):
   RRF+trust ranking, citation feedback, forgetting-as-ranking, bi-temporal validity with `as_of` queries,

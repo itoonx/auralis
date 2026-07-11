@@ -125,6 +125,20 @@ a semantic mode plugs into the same seam if its Deferred trigger ever fires.
 **Gate:** aggregation class majority-fixed on pooled-100; API latency bounded on the production
 brain. **Effort:** 2–3 days (API + harness + tests). **Risk:** recall-vs-precision — the floor
 needs its own small bench.
+**⊘ DROPPED (2026-07-12) — premise refuted by our own evidence; deferred with explicit triggers.**
+The R3 probe showed the 7 counting losses are FLAT at k=48→800 (the evidence is rank-∞: instance
+vocabulary — "Tamiya Spitfire" — shares no words with the question), so "return every match above a
+floor" cannot recover this class by construction. What actually remained of M4 has since shipped or
+been proven elsewhere: the reader half landed in L2 (enumerate-then-count + whole top-48), the
+vocabulary half has two answers — R4 blind expansion (+3, verified; prod use blocked on LLM credit)
+and the BGE-M3 semantic lane (SHIPPED 2026-07-12; subset50-cleaned probe: multi-session
+session-coverage 100%@48, 100% semantic engagement verified). The product story (`mode=all`, "list
+everything about X") has no live consumer today — every current caller (recall hook, fleet, MCP,
+studio) uses ranked top-k. Reopen triggers (do NOT build without one):
+(a) a fleet/MCP feature actually needs exhaustive listing → build `mode=all` (half a day);
+(b) the post-credit answer-stage A/B on the semantic stack shows aggregation still failing
+end-to-end → re-probe the lexical-miss residue (trigram-era "6/7" is stale), then sparse lane /
+expansion routing sized to what the probe finds.
 
 ### M5 · P4 — the public number
 **Why:** the whole point of the benchmark line: one non-self-referential number.
@@ -225,6 +239,7 @@ M1 is strictly first: every later gate is measured through it.
 |---|---|
 | Semantic embedder re-A/B (preference class, n=4) — **RE-OPENED 2026-07-10, the "CLOSED" verdict was wrong** | First read (2026-07-09): `AURALIS_SEMANTIC=1` pooled-100 = 72 vs trigram 79.3, "decisively worse, trigram stays." **That conclusion is now retracted.** The retrieval-recall probe (2026-07-10) found the semantic harness run gives byte-identical recall to trigram with a 28s wall (embedding 100k chunks is impossible in 28s) — i.e. **the corpus was almost certainly never actually embedded in the harness `AURALIS_SEMANTIC` path** (best-effort embed silently no-ops / sidecar timing). So the 72 was trigram-with-variance, NOT a semantic test. A clean manual test DID engage MiniLM (boot log "embedder: semantic dim 384") but its signal is WEAK — query "homegrown ingredients" ranks "fresh basil from my garden" only 1.6% above "weather in Tokyo" (0.0205 vs 0.0202), so among ~1000 distractors the paraphrase evidence drowns. **Real state: (a) the harness semantic path is broken/unverified — fix it before any A/B counts; (b) MiniLM-L6 alone looks too weak for paraphrase recall — a stronger embedder and/or vector-weighted fusion is the real question. The embedder question is OPEN.** |
 | MMR / diversity re-ranking | sibling crowding actually observed in recall top-3 (M0 watch item) |
+| M4 aggregation retrieval (`mode=all`) — DROPPED 2026-07-12, see M4 section | a fleet/MCP feature needs exhaustive listing; OR post-credit answer-stage A/B on the semantic stack shows aggregation still failing end-to-end |
 | Context budget for recall injection | injected context exceeds ~10KB in real sessions |
 | LongMemEval-M (1.5M tokens) | after the P4 `S` number is published and worth extending |
 | Cross-machine claim TTL/lease, hetero runtimes | unchanged — see `roadmap.md` (platform axis) |
