@@ -41,6 +41,22 @@ services:
     restart: unless-stopped
 
   # -- opt-in profiles ---------------------------------------------------------------------------------
+  # Semantic recall fully in Docker (the install.sh path — no host python needed). CPU-only; a host
+  # install with Apple-GPU (auralis sidecar --install) is faster — point ORACLE_EMBED_URL at
+  # host.docker.internal to use it instead. Not published: reachable as http://bge:47783 on the
+  # compose network only. Weights cache into the bind mount (shared with a host install).
+  bge:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.bge
+    environment:
+      - BGE_HOST=0.0.0.0
+      - BGE_CACHE=/app/.auralis-out/models-py
+    volumes:
+      - ./.auralis-out:/app/.auralis-out
+    restart: unless-stopped
+    profiles: ["semantic"]
+
   # Share the studio publicly (explicit choice — this exposes your brain's data):
   #   auralis start --share   (or: docker compose --profile share up -d)
   tunnel:

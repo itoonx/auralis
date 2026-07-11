@@ -1,13 +1,20 @@
 # studio — the dashboard's PRODUCTION build behind nginx, with /api proxied to the oracle service.
-# The dist/ is built on the HOST (`pnpm -C dashboard build`, the auralis CLI does it automatically):
-# building inside the image would mean shipping node_modules into the build for no benefit — the artifact
-# is static files either way, and host-build keeps the image a 10MB nginx.
+# Multi-stage: the dashboard builds INSIDE the image (Docker-only installs need no host node/pnpm);
+# the final image is still just a ~10MB nginx — the node stage is discarded.
+FROM node:22-alpine AS build
+WORKDIR /app
+RUN corepack enable
+COPY dashboard/package.json dashboard/pnpm-lock.yaml dashboard/
+RUN cd dashboard && pnpm install --frozen-lockfile
+COPY dashboard/ dashboard/
+RUN cd dashboard && pnpm build
+
 FROM nginx:alpine
 
 # As a template (not conf.d directly): the nginx image's entrypoint runs envsubst on it at start, filling
 # ${ORACLE_TOKEN} from the container env before nginx parses the config.
 COPY docker/nginx.conf /etc/nginx/templates/default.conf.template
-COPY dashboard/dist/ /usr/share/nginx/html/
+COPY --from=build /app/dashboard/dist/ /usr/share/nginx/html/
 
 EXPOSE 80
 

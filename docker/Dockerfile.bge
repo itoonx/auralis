@@ -1,0 +1,19 @@
+# bge — the semantic embed+rerank sidecar as a compose service (the Docker-only install path).
+# CPU torch: slower than the host/MPS install (~40-80ms vs ~7ms per doc) but zero host dependencies.
+# Model weights (~4.6GB) download lazily on first /health into the bind-mounted .auralis-out/models-py,
+# so they survive rebuilds and are shared with a host install if you later switch (auralis sidecar).
+FROM python:3.12-slim
+
+WORKDIR /app
+RUN pip install --no-cache-dir FlagEmbedding
+
+COPY src/bge-sidecar.py src/bge-sidecar.py
+
+ENV BGE_HOST=0.0.0.0
+EXPOSE 47783
+
+# start_period is generous: the first health probe triggers the model download.
+HEALTHCHECK --interval=15s --timeout=30s --retries=8 --start-period=15m \
+  CMD python -c "import urllib.request,sys; sys.exit(0 if b'true' in urllib.request.urlopen('http://127.0.0.1:47783/health', timeout=25).read() else 1)"
+
+CMD ["python", "src/bge-sidecar.py"]

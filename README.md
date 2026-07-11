@@ -56,18 +56,15 @@ so every process, model, and machine shares them.
 
 ## Getting started
 
-**Prerequisites:** Node 20+ · pnpm · Bun ≥ 1.2 · Docker (daemon stack only) · **Claude Code logged in** —
-workers reuse your login, no API key needed.
+**Prerequisites:** a running Docker daemon — that's it for the platform. (For the fleet/MCP tools:
+Node 20+ · pnpm · **Claude Code logged in** — workers reuse your login, no API key needed.)
+
+**1 · Install & start — one command, everything in Docker** *(auth, semantic recall, dashboard — all
+automated and idempotent; full walkthrough: [docs/getting-started.md](docs/getting-started.md))*
 
 ```bash
 git clone <this repo> && cd auralis
-pnpm install && pnpm test
-```
-
-**1 · Start the platform** *(daemon — survives terminal close; skip if no Docker: every command boots a temporary brain itself)*
-
-```bash
-node bin/auralis.mjs start        # studio → http://localhost:47780 · brain API → :47778
+./install.sh                      # studio → http://localhost:47780 · brain API → :47778
 ```
 
 **2 · Analyse any repo**

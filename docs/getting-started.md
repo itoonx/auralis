@@ -5,33 +5,33 @@ Zero → running stack → your Claude Code CLI wired into the shared brain. (Op
 
 ## 0 · Prerequisites (the only manual part)
 
+**Docker-only path (recommended):** just a running Docker daemon (OrbStack recommended on macOS) — `docker ps`.
+
+For the host path and the Claude Code integrations (§4) you'll also want:
+
 | Need | Why | Check |
 |---|---|---|
-| Node 20+ · pnpm | host-side CLI, hooks, sidecars | `node -v` · `pnpm -v` |
-| Bun ≥ 1.2 | oracle-lite runs on Bun | `bun -v` |
-| Docker daemon (OrbStack recommended on macOS) | the production stack (brain + studio) | `docker ps` |
-| sqlite3 CLI | WAL-safe backups | `sqlite3 --version` |
+| Node 20+ · pnpm | Claude Code hooks, MCP server, `auralis` CLI | `node -v` · `pnpm -v` |
+| Bun ≥ 1.2 | only if you run the oracle outside Docker | `bun -v` |
+| sqlite3 CLI | WAL-safe backups (`auralis backup`) | `sqlite3 --version` |
 | **Claude Code, logged in** | fleet workers and MCP tools reuse your login — no API key | `claude --version` |
-| *(optional)* Python 3.10+ | semantic recall sidecar (BGE-M3) — without it the brain still works, lexical-only | `python3 --version` |
+| *(optional)* Python 3.10+ | host-GPU semantic sidecar (Apple silicon MPS — ~10× faster embeds than the in-Docker one) | `python3 --version` |
 
 ## 1 · One command
 
 ```bash
 git clone https://github.com/itoonx/Auralis && cd Auralis
-node bin/auralis.mjs setup             # or: setup --no-semantic
+./install.sh                           # or: ./install.sh --no-semantic
 ```
 
-`setup` does everything below by itself, prints each step, and **fails early with a clear list** if a
-prerequisite is missing. It is **idempotent** — re-run it any time; every step skips what already exists:
+**Everything runs in Docker** — the dashboard builds inside its image, semantic recall runs as the `bge`
+compose service; the host needs docker and nothing else. The script is **idempotent** (re-run any time)
+and does, in order: prereq check → auth secrets into `.env.oracle` → wire the oracle to the `bge` service
+→ `docker compose up --build` → wait healthy → embed your brain (first run downloads ~4.6GB of model
+weights inside the container; if that's still going the script hands off with the exact command to finish).
 
-1. checks the prerequisites above
-2. `pnpm install`
-3. generates auth secrets into `.env.oracle` (gitignored)
-4. *(if python3)* installs the BGE-M3 sidecar into a venv + autostarts it via launchd
-5. starts the stack (builds the dashboard on first run, waits for healthy)
-6. schedules the daily 04:00 WAL-safe backup
-7. embeds your brain semantically (first run downloads ~4.6GB of model weights; if that's still
-   going, setup hands off — run `node bin/auralis.mjs reembed` when `auralis sidecar` shows ✅)
+> **Host-GPU alternative** (Apple silicon — ~10× faster embedding): `node bin/auralis.mjs setup`
+> runs the same steps but puts the semantic sidecar on the host under launchd (needs node+pnpm+python3).
 
 You now have:
 - **studio** (dashboard) → http://localhost:47780

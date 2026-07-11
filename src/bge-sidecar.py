@@ -14,6 +14,8 @@ from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 
 os.environ.setdefault("HF_HOME", os.environ.get("BGE_CACHE", ".auralis-out/models-py"))
 PORT = int(os.environ.get("BGE_PORT", "47783"))
+# 127.0.0.1 on a host install; the Docker service sets BGE_HOST=0.0.0.0 (unpublished — compose-network only).
+HOST = os.environ.get("BGE_HOST", "127.0.0.1")
 EMBED_MODEL = os.environ.get("BGE_EMBED_MODEL", "BAAI/bge-m3")
 RERANK_MODEL = os.environ.get("BGE_RERANK_MODEL", "BAAI/bge-reranker-v2-m3")
 
@@ -113,5 +115,5 @@ class H(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    print(f"bge-sidecar ({EMBED_MODEL} + {RERANK_MODEL}) on http://localhost:{PORT}", flush=True)
-    ThreadingHTTPServer(("127.0.0.1", PORT), H).serve_forever()
+    print(f"bge-sidecar ({EMBED_MODEL} + {RERANK_MODEL}) on http://{HOST}:{PORT}", flush=True)
+    ThreadingHTTPServer((HOST, PORT), H).serve_forever()
