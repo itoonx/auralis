@@ -2,6 +2,30 @@
 
 > Deep dive. The overview lives in the [README](../README.md).
 
+## Architecture
+
+```
+             mozaik · one shared event bus (the society)
+   ┌──────────────────────────────────────────────────────────┐
+   │   Planner → Conductor → Worker ×N (any agent runtime)     │
+   │   MemoryLibrarian · Sentry · Critic · Auditor             │
+   └───────────┬───────────────────────────────┬──────────────┘
+    learn · search · relate (HTTP / MCP)        │  claim (HTTP) — deterministic dedup
+   ┌───────────▼───────────────────────────────▼──────────────┐
+   │  oracle-lite · the brain + the middle layer               │
+   │  Bun + SQLite FTS5 · LanceDB vectors · bearer/JWT auth    │
+   │  persistent · append-only (no delete)                    │
+   │  semantic recall · distillation · graph · claim registry  │
+   └───────────┬───────────────────────────────────────────────┘
+               │ /embed · /rerank (fail-open, counted)
+   ┌───────────▼──────────────────────────────┐
+   │  bge sidecar · BGE-M3 + cross-encoder     │  Docker service, or host/MPS via launchd
+   └───────────────────────────────────────────┘
+```
+
+Left arrow = **memory** (what agents know) · right arrow = **policy** (who's doing what). Both central,
+so every process, model, and machine shares them.
+
 ## Why a platform, not just agents
 
 Run one agent and it's easy. Run a *fleet* and you've quietly built a small distributed system — a dozen
