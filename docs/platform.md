@@ -42,10 +42,13 @@ The brain is **oracle-lite** — a tiny local service (Bun + SQLite full-text se
 a finding is searchable the instant it's written — and it degrades gracefully to keyword-only if the vector
 layer isn't available. On top of plain storage it does four things a flat memory can't:
 
-**Recall by meaning, not keywords.** With `AURALIS_SEMANTIC=1` the vectors are real sentence embeddings
-(all-MiniLM-L6-v2, via a small Node sidecar), so *"how do we authenticate users"* finds a note about
-*"the sign-in flow validates credentials"* despite zero shared words. Without the sidecar it falls back to
-a lightweight built-in embedder, so it always runs.
+**Recall by meaning, not keywords.** In production the vectors are real sentence embeddings — **BGE-M3**
+(1024-dim, multilingual) via an embed sidecar (`ORACLE_EMBED_URL`), so *"how do we authenticate users"*
+finds a note about *"the sign-in flow validates credentials"* despite zero shared words; an optional
+cross-encoder reranker (`search?rerank=1`) sharpens the top of the list. Measured: lexical ~0% →
+BGE-M3 dense 88% → +reranker 96% paraphrase recall@10. If the sidecar is down the oracle falls back
+per-call to a lightweight built-in embedder — counted in `/api/stats`, so it always runs and never
+lies about it.
 
 **Distillation — the brain gets sharper, not just bigger.** A persistent brain rots by accumulation.
 `pnpm distill` is the janitor: it clusters findings that mean the same thing, synthesises each cluster into

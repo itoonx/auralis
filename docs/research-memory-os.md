@@ -248,6 +248,14 @@ the paraphrase case; (2) if the gap is real, flip the default together with the 
 choose the language model at that moment (if pure-Thai session queries matter, go multilingual once
 rather than flipping twice).
 
+> **RESOLVED 2026-07-12 — option C (bge-m3) shipped to production.** The two-step ran: instrument fixed
+> first (`/api/reembed` backfill + `semantic_embeds`/`embed_fallbacks` proof-of-engagement counters —
+> the silent no-embed gap was real), then the measurement was decisive: paraphrase bench (n=24, pool 224)
+> lexical ~0% → MiniLM 33% → **BGE-M3 dense 88% → 96% with bge-reranker-v2-m3** recall@10; real-LME
+> ground-truth probe (subset50, 100% engagement verified) moved exactly the dying classes (preference
+> chunk@48 33→67, assistant@12 67→83). Runs as a python/FlagEmbedding sidecar — host launchd (MPS) or
+> the `bge` compose service — fail-open with counted fallbacks. See [production.md](production.md).
+
 ## 8. Memory Philosophy — measured against the implementation (2026-07-07)
 
 The philosophy: memory is not remembering everything — it is remembering **what matters, why, and when**.

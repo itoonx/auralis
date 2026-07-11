@@ -26,6 +26,8 @@ numbers are real but **directional** — each is from a single non-deterministic
 | **The sleep job judges for real** | live loop: a near-duplicate pair superseded mechanically; a genuine 10min→30min contradiction classified by the LLM and the stale fact invalidated with the reason recorded — after an atomic pre-mutation snapshot |
 | **Workers self-narrate completely** | a replayed run shows plan → every tool step → findings → acceptance verdicts → reworks → summary, with no silent gaps |
 | **Session capture is pollution-proof** | fleet-worker prompts and harness payloads stand down from the hooks; a worker prompt that briefly landed as a trust-1.0 memory is what proved the guard necessary |
+| **Semantic recall earns its keep** | paraphrase bench (n=24, pool 224): lexical ~0% → BGE-M3 dense **88%** → +cross-encoder rerank **96%** recall@10; on real LongMemEval (subset50, ground-truth probes, 100% semantic engagement verified) the dying classes moved — preference evidence@48 **33%→67%**, assistant@12 **67%→83%**, overall@48 88%→93% |
+| **Degradation is counted, never silent** | the embed/rerank lanes fail OPEN with counters (`embed_fallbacks`, `rerank_fail`) — a dead sidecar shows up in `/api/stats`, not as silently worse recall; proven live when a killed sidecar produced exactly 404 counted fallbacks |
 
 ## Honest notes
 

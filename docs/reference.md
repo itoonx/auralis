@@ -1,6 +1,8 @@
 # Reference — commands, configuration, project layout
 
-`pnpm run help` prints this live. Everything runs via env vars + pnpm scripts (no unified CLI yet).
+`pnpm run help` prints this live. Fleet/bench work runs via env vars + pnpm scripts; the **production
+stack has its own CLI** — `node bin/auralis.mjs` (`setup` · `start` · `stop` · `status` · `logs` ·
+`backup` · `sidecar` · `reembed` · `doctor`), documented in [production.md](production.md).
 
 **Analyse & answer**
 | Command | What it does |
@@ -32,7 +34,8 @@
 | Command | What it does |
 |---|---|
 | `pnpm oracle` | run the brain sidecar (oracle-lite) on its own |
-| `pnpm embed` | run the semantic embedding sidecar |
+| `pnpm embed` | run the MiniLM embedding sidecar (bench/dev; production uses the BGE-M3 sidecar — see below) |
+| `.auralis-out/venv-bge/bin/python src/bge-sidecar.py` | the production semantic sidecar: BGE-M3 dense+sparse `/embed` + bge-reranker-v2-m3 `/rerank` (managed by `auralis sidecar --install` or the `bge` compose service) |
 | `pnpm test` | run the test suite |
 | `pnpm typecheck` | `tsc --noEmit` |
 | `pnpm run help` | the usage guide |
@@ -72,6 +75,15 @@ Full list + defaults in `.env.example`. The ones that matter most:
 | `AURALIS_ACCEPT` | the acceptance spec (`rps` \| `todo`); set it in build mode to **close the loop** — `pnpm dev` validates the output and reworks on FAIL |
 | `AURALIS_BUILD_RETRIES` | extra fleet reworks when acceptance fails (default 1) |
 
+**Production brain (oracle) — secrets live in `.env.oracle`, gitignored**
+| Variable | Effect |
+|---|---|
+| `ORACLE_TOKEN` | static bearer required on every API call except `/health` (internal callers read the same file automatically) |
+| `ORACLE_JWT_SECRET` | accept HS256 JWTs as an alternative credential — mint: `bun oracle-lite/jwt.ts sign --sub me --days 30` |
+| `ORACLE_EMBED_URL` | semantic embedder endpoint (`http://bge:47783` in-Docker, or `http://host.docker.internal:47783` for the host/MPS sidecar); unset = built-in lexical embedder |
+| `ORACLE_RERANK_URL` | cross-encoder endpoint; enables `search?rerank=1` (top-100 → rerank → top-k, fail-open, counted in `rerank_ok/rerank_fail`) |
+| `POST /api/reembed` | rebuild the vector table for every existing doc (idempotent; `auralis reembed` wraps it) |
+
 **Quality (heuristic vs LLM)**
 | Variable | Effect |
 |---|---|
@@ -99,7 +111,11 @@ Full list + defaults in `.env.example`. The ones that matter most:
 | `src/runner.ts`, `src/brain-mcp.ts` | drive Claude Code (or a deterministic stub); expose the brain as MCP tools; enforce claims at the tool boundary |
 | `src/memory.ts` | the brain behind a swappable adapter (Oracle / Null) — memory **and** claim endpoints |
 | `src/log.ts` | centralized timing sink — every span, one grouped summary |
-| `src/embed.ts`, `src/embed-sidecar.ts` | real semantic embeddings (a sentence-transformer sidecar) |
+| `src/embed.ts`, `src/embed-sidecar.ts` | MiniLM embeddings (bench/dev sidecar) |
+| `src/bge-sidecar.py` | the production semantic sidecar — BGE-M3 dense+sparse `/embed`, bge-reranker-v2-m3 `/rerank` (host/MPS via launchd, or the `bge` compose service) |
+| `oracle-lite/jwt.ts` | zero-dep HS256 JWT sign/verify for API auth (self-check: `bun oracle-lite/jwt.ts`) |
+| `hooks/session-capture.mjs` | Claude Code session ↔ brain: recall injection + deterministic capture (global installs go via a `~/.claude/hooks` symlink — see getting-started §4b) |
+| `bin/auralis.mjs`, `install.sh` | the production CLI · the curl-pipeable Docker-only installer |
 | `src/distill.ts`, `src/run-distill.ts` | cluster near-duplicate findings → one vetted finding, supersede the raws |
 | `src/graph.ts`, `run-build-graph.ts`, `run-recall.ts` | build the graph from findings; graph-expanded recall |
 | `src/decision.ts`, `src/decisions.ts` | honest ADRs recorded into the brain — kept & superseded, never deleted |

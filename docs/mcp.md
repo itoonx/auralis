@@ -23,7 +23,9 @@ several minutes and its workers bill your account; oracle-lite uses port 47778.
 ### Session capture — your Claude Code session feeds the same brain
 
 `hooks/session-capture.mjs` (registered in `.claude/settings.json`) captures the **interactive session
-itself** into oracle-lite, and injects repo memory back into every prompt. It coexists with ambient memory
+itself** into oracle-lite, and injects repo memory back into every prompt. To also capture from *other*
+repos, install it globally **via a `~/.claude/hooks` symlink** — never point global settings straight at
+the repo file, or both copies fire and every memory lands twice ([getting-started.md](getting-started.md) §4b). It coexists with ambient memory
 tools like Cognee — different lane: Cognee is global session memory; this is the *repo's engineering
 brain*, the same one the fleet uses. So what you tell Claude Code becomes recallable by fleet workers, and
 fleet findings surface back in your session — bidirectional, which a standalone memory plugin can't do.
