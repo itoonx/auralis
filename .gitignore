@@ -12,3 +12,4 @@ dist/
 !.claude/settings.json
 .DS_Store
 .astro/
+.env.oracle

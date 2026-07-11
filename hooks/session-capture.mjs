@@ -12,6 +12,16 @@
 // Fail-silent by design: a dead oracle or a slow request must never break the user's session.
 import { readFileSync } from "node:fs";
 import { basename } from "node:path";
+import { fileURLToPath } from "node:url";
+
+// Carry the same ORACLE_TOKEN / ORACLE_API_URL the container reads: one repo .env feeds both the daemon
+// (via compose) and this host-side hook, so once auth is on the hook still authenticates. Without this the
+// POST below would 401 and be swallowed by its fail-silent catch — the brain would stop learning, silently.
+// Skip under vitest: this module is imported for its pure functions there, and loading prod secrets into
+// the test process would make the tests' scratch oracle demand auth and break the suite.
+if (!process.env.VITEST) {
+  try { process.loadEnvFile(fileURLToPath(new URL("../.env.oracle", import.meta.url))); } catch { /* no .env.oracle — fine */ }
+}
 
 const ORACLE = process.env.ORACLE_API_URL ?? "http://localhost:47778";
 const TIMEOUT = 1500; // ms — a memory write is never worth a laggy prompt

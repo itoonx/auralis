@@ -8,6 +8,8 @@ import { pipeline, env } from "@huggingface/transformers";
 env.cacheDir = process.env.EMBED_CACHE ?? ".auralis-out/models";
 const MODEL = process.env.EMBED_MODEL ?? "Xenova/all-MiniLM-L6-v2";
 const PORT = Number(process.env.EMBED_PORT ?? 47779);
+// Pooling differs by model family: MiniLM/e5 want mean, BGE wants the CLS token. Default mean (unchanged).
+const POOLING = (process.env.EMBED_POOLING ?? "mean") as "mean" | "cls";
 
 let extractor: any = null;
 let dim = 384;
@@ -19,7 +21,7 @@ async function embed(texts: string[]): Promise<number[][]> {
   const ex = await getExtractor();
   const out: number[][] = [];
   for (const t of texts) {
-    const r: any = await ex(String(t).slice(0, 2000), { pooling: "mean", normalize: true });
+    const r: any = await ex(String(t).slice(0, 2000), { pooling: POOLING, normalize: true });
     const arr = Array.from(r.data as Float32Array) as number[];
     dim = arr.length;
     out.push(arr);

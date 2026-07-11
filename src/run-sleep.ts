@@ -6,6 +6,7 @@
 //   compatible    → nothing; both stay current.
 // Budget-capped, append-only either way, and the snapshot taken BEFORE any of it means one file restores
 // everything. AURALIS_SLEEP_LLM=0 skips judgment and only reports the candidates.
+import "./load-env"; // MUST be first: loads .env so memory.ts's AUTH picks up ORACLE_TOKEN before it's computed
 import { OracleAdapter, oracleReachable } from "./memory";
 import { makeRunner, type AgentRunner } from "./runner";
 

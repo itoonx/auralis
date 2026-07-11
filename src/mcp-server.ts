@@ -10,6 +10,7 @@
 process.env.AURALIS_MCP = "1";
 console.log = (...a: unknown[]) => console.error(...a); // protect the stdout JSON-RPC channel
 
+import "./load-env"; // MUST be first: loads .env so memory.ts's AUTH picks up ORACLE_TOKEN before it's computed
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";

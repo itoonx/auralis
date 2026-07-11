@@ -4,7 +4,9 @@
 # is static files either way, and host-build keeps the image a 10MB nginx.
 FROM nginx:alpine
 
-COPY docker/nginx.conf /etc/nginx/conf.d/default.conf
+# As a template (not conf.d directly): the nginx image's entrypoint runs envsubst on it at start, filling
+# ${ORACLE_TOKEN} from the container env before nginx parses the config.
+COPY docker/nginx.conf /etc/nginx/templates/default.conf.template
 COPY dashboard/dist/ /usr/share/nginx/html/
 
 EXPOSE 80

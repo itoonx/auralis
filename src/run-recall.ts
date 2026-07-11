@@ -1,5 +1,6 @@
 // `pnpm recall "<query>"` — show what a worker would be handed for a query: flat findings PLUS the graph
 // neighborhood (GRAPH_COMPLETION). Proves the graph is USED in recall, not just built.
+import "./load-env"; // MUST be first: loads .env so memory.ts's AUTH picks up ORACLE_TOKEN before it's computed
 import { OracleAdapter } from "./memory";
 import { ensureOracle } from "./fleet";
 import { MemoryLibrarian } from "./participants";

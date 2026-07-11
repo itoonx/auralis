@@ -13,9 +13,13 @@ services:
       # Bind mount, not a named volume: the brain stays greppable/backupable from the host, and the
       # host-side fleet's timing.jsonl stays readable by the studio's Timing tab.
       - ./.auralis-out:/app/.auralis-out
-    environment:
-      - ORACLE_TOKEN=${ORACLE_TOKEN:-}
-      # ORACLE_ALLOW_RESET deliberately NOT set — no reset route in production.
+    # Secrets live in .env.oracle (gitignored) — NOT the auto-loaded .env, because Bun auto-loads .env into
+    # every `bun run oracle-lite/server.ts` (test/bench scratch oracles included), which would make them
+    # demand auth their clients don't send. required:false so a dev without the file still boots (auth off).
+    env_file:
+      - path: .env.oracle
+        required: false
+    # ORACLE_ALLOW_RESET deliberately NOT set — no reset route in production.
     restart: unless-stopped
 
   studio:
@@ -24,6 +28,13 @@ services:
       dockerfile: docker/Dockerfile.studio
     ports:
       - "127.0.0.1:47780:80"
+    # nginx injects the oracle token on the /api proxy hop (see docker/nginx.conf). ORACLE_TOKEN comes from
+    # .env.oracle; the FILTER limits envsubst to that one var so nginx's own $host/$uri are left intact.
+    env_file:
+      - path: .env.oracle
+        required: false
+    environment:
+      - NGINX_ENVSUBST_FILTER=ORACLE_TOKEN
     depends_on:
       oracle:
         condition: service_healthy

@@ -9,6 +9,7 @@ import { mkdirSync, readdirSync, rmSync, copyFileSync } from "node:fs";
 import { resolveClaim } from "../src/claim";
 import { extractTriplets } from "../src/triplets";
 import { rrf, trustOf, boost, boostParts, daysBetween, strength, pinnedOf, ARCHIVE_FLOOR } from "./rank";
+import { verifyJwt } from "./jwt";
 
 const PORT = Number(process.env.ORACLE_PORT ?? 47778);
 const DB_PATH = process.env.ORACLE_DB ?? ".auralis-out/brain.sqlite";
@@ -436,10 +437,14 @@ function claimIn(scope: string): Map<string, string> {
   return m;
 }
 
-// Optional bearer auth (production): set ORACLE_TOKEN and every route except /health requires
-// `Authorization: Bearer <token>`. Unset = dev behaviour unchanged. Compose publishes ports on
-// 127.0.0.1 only; the token is defence for anything beyond that (tunnels, LAN).
+// Optional bearer auth (production): every route except /health requires `Authorization: Bearer <cred>`.
+// Two accepted creds, either satisfies:
+//   ORACLE_TOKEN       — a static shared secret (compare the whole header).
+//   ORACLE_JWT_SECRET  — an HS256 JWT signed with this secret (see ./jwt.ts to mint/verify).
+// Both unset = dev behaviour unchanged (open). Compose publishes ports on 127.0.0.1 only; this is the
+// defence for anything beyond that (tunnels, LAN).
 const TOKEN = process.env.ORACLE_TOKEN;
+const JWT_SECRET = process.env.ORACLE_JWT_SECRET;
 
 const server = Bun.serve({
   port: PORT,
@@ -447,8 +452,12 @@ const server = Bun.serve({
     const url = new URL(req.url);
 
     if (url.pathname === "/health") return Response.json({ ok: true, vectors: vectorsOn, embedder });
-    if (TOKEN && req.headers.get("authorization") !== `Bearer ${TOKEN}`) {
-      return Response.json({ error: "unauthorized" }, { status: 401 });
+    if (TOKEN || JWT_SECRET) {
+      const raw = req.headers.get("authorization") ?? "";
+      const bearer = raw.startsWith("Bearer ") ? raw.slice(7) : "";
+      let ok = TOKEN ? raw === `Bearer ${TOKEN}` : false;              // static token — unchanged semantics
+      if (!ok && JWT_SECRET && bearer) { try { verifyJwt(bearer, JWT_SECRET); ok = true; } catch { /* → 401 */ } }
+      if (!ok) return Response.json({ error: "unauthorized" }, { status: 401 });
     }
     if (url.pathname === "/api/stats") {
       // Scope to a project when asked, so the dashboard cards match its project-scoped tabs. No project =
@@ -474,6 +483,19 @@ const server = Bun.serve({
     if (req.method === "POST" && url.pathname === "/api/embed-settle") {
       await settleEmbedQueue();
       return Response.json({ ok: true, embedded: qEmbedOk, failed: qEmbedFail, vectors: vectorsOn });
+    }
+
+    // Backfill: rebuild the vector table for EVERY existing doc. Needed when turning semantic on over a brain
+    // ingested under a different embedder (learn only embeds NEW docs). Idempotent — resets the table first.
+    // Sequential through the batch worker (no concurrent-ingest fallback), so semantic_embeds should equal the
+    // doc count and embed_fallbacks should stay ~0 — that equality IS the "semantic actually engaged" proof.
+    if (req.method === "POST" && url.pathname === "/api/reembed") {
+      if (!vectorsOn) return Response.json({ error: "vectors off" }, { status: 400 });
+      await vectorReset();
+      const docs = db.query("SELECT id, content FROM docs").all() as { id: string; content: string }[];
+      for (const d of docs) enqueueVector(d.id, d.content);
+      await settleEmbedQueue();
+      return Response.json({ ok: true, docs: docs.length, embedded: qEmbedOk, failed: qEmbedFail, semantic_embeds: semEmbedOk, embed_fallbacks: semEmbedFallback, embedder, dim: EMBED_DIM });
     }
 
     if (req.method === "POST" && url.pathname === "/api/learn") {
