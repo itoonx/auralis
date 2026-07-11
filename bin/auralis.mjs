@@ -11,14 +11,19 @@
 //   auralis backup [--install|--uninstall]   WAL-safe brain snapshot; --install schedules it daily
 //   auralis doctor              docker? compose file? ports? brain reachable? token? reboot-ready?
 import { execSync, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readdirSync, unlinkSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { randomBytes } from "node:crypto";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const ORACLE = process.env.ORACLE_API_URL ?? "http://localhost:47778";
-const AUTH = process.env.ORACLE_TOKEN ? { authorization: `Bearer ${process.env.ORACLE_TOKEN}` } : {};
+// The CLI authenticates like every internal caller: ORACLE_TOKEN from the environment, else .env.oracle —
+// otherwise `status`/`doctor` read a 401 body and report "undefined docs" on an authed stack.
+const ENV_ORACLE = join(ROOT, ".env.oracle");
+const TOKEN = process.env.ORACLE_TOKEN ?? (existsSync(ENV_ORACLE) ? readFileSync(ENV_ORACLE, "utf8").match(/^ORACLE_TOKEN=(.+)$/m)?.[1] : undefined);
+const AUTH = TOKEN ? { authorization: `Bearer ${TOKEN}` } : {};
 const [cmd, ...rest] = process.argv.slice(2);
 
 const sh = (args, opts = {}) => spawnSync(args[0], args.slice(1), { cwd: ROOT, stdio: "inherit", ...opts });
@@ -132,6 +137,91 @@ async function sidecarStatus() {
   console.log(`  autostart    ${existsSync(SIDECAR_PLIST) ? "✅ installed" : "✗ not installed (auralis sidecar --install)"}`);
 }
 
+// -- setup: zero → running, one command, idempotent (re-run any time; every step skips what exists) ------
+const envOracleHas = (key) => existsSync(ENV_ORACLE) && readFileSync(ENV_ORACLE, "utf8").includes(`${key}=`);
+
+async function setup() {
+  const noSemantic = rest.includes("--no-semantic");
+  // 1 · preflight — hard requirements first, one clear list (no partial installs on a broken machine)
+  const need = [
+    ["node 20+", true], // you're running it
+    ["pnpm", sh(["pnpm", "--version"], { stdio: "ignore" }).status === 0],
+    ["bun", sh(["bun", "--version"], { stdio: "ignore" }).status === 0],
+    ["docker", sh(["docker", "info"], { stdio: "ignore" }).status === 0],
+    ["sqlite3", sh(["sqlite3", "--version"], { stdio: "ignore" }).status === 0],
+  ];
+  const missing = need.filter(([, ok]) => !ok).map(([n]) => n);
+  console.log("① prerequisites");
+  for (const [n, ok] of need) console.log(`   ${ok ? "✅" : "✗"} ${n}`);
+  if (missing.length) return fail(`install these first, then re-run: ${missing.join(", ")}`);
+  const hasPython = sh(["python3", "--version"], { stdio: "ignore" }).status === 0;
+
+  // 2 · deps
+  console.log("② dependencies");
+  if (existsSync(join(ROOT, "node_modules"))) console.log("   ✅ node_modules (skip)");
+  else if (sh(["pnpm", "install"]).status !== 0) return fail("pnpm install failed");
+
+  // 3 · secrets — BEFORE the stack, so containers are created with auth already wired
+  console.log("③ auth secrets (.env.oracle)");
+  for (const key of ["ORACLE_TOKEN", "ORACLE_JWT_SECRET"]) {
+    if (envOracleHas(key)) { console.log(`   ✅ ${key} (exists)`); continue; }
+    appendFileSync(ENV_ORACLE, `${key}=${randomBytes(32).toString("hex")}\n`);
+    console.log(`   ✅ ${key} generated`);
+  }
+
+  // 4 · semantic sidecar (optional; before `start` so the oracle is created pointing at it)
+  if (!noSemantic && hasPython) {
+    console.log("④ semantic recall (BGE-M3 sidecar)");
+    if (!existsSync(SIDECAR_PY)) {
+      console.log("   · creating venv + installing FlagEmbedding (~2GB, one-time)…");
+      if (sh(["python3", "-m", "venv", join(ROOT, ".auralis-out", "venv-bge")]).status !== 0) return fail("venv failed");
+      if (sh([join(ROOT, ".auralis-out", "venv-bge", "bin", "pip"), "install", "-q", "FlagEmbedding"]).status !== 0) return fail("pip install FlagEmbedding failed");
+    } else console.log("   ✅ venv (exists)");
+    if (!envOracleHas("ORACLE_EMBED_URL")) {
+      appendFileSync(ENV_ORACLE, "ORACLE_EMBED_URL=http://host.docker.internal:47783\nORACLE_RERANK_URL=http://host.docker.internal:47783\n");
+      console.log("   ✅ oracle → sidecar URLs added");
+    } else console.log("   ✅ sidecar URLs (exist)");
+    installSidecar(); // idempotent; launchd starts it now and on every login/crash
+  } else console.log(`④ semantic recall — skipped (${noSemantic ? "--no-semantic" : "python3 not found"}); brain runs lexical-only`);
+
+  // 5 · the stack (builds dashboard on first run, waits for healthy) + daily backup
+  console.log("⑤ stack");
+  await start();
+  console.log("⑥ daily backup schedule");
+  installSchedule();
+
+  // 6 · first-run semantic backfill — the model downloads ~4.6GB lazily; don't block setup forever
+  if (!noSemantic && hasPython) {
+    process.stdout.write("⑦ waiting for the sidecar model (first run downloads ~4.6GB)");
+    let up = false;
+    for (let i = 0; i < 36; i++) { // ~3 min, then hand off
+      try { if ((await fetch("http://127.0.0.1:47783/health", { signal: AbortSignal.timeout(5000) })).ok) { up = true; break; } } catch { /* loading */ }
+      process.stdout.write("."); await new Promise((r) => setTimeout(r, 5000));
+    }
+    console.log("");
+    if (up) {
+      const token = readFileSync(ENV_ORACLE, "utf8").match(/^ORACLE_TOKEN=(.+)$/m)?.[1] ?? "";
+      try {
+        const r = await (await fetch(`${ORACLE}/api/reembed`, { method: "POST", headers: { authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(600_000) })).json();
+        console.log(`   ✅ brain embedded semantically: ${r.embedded}/${r.docs} (fallbacks ${r.embed_fallbacks ?? 0})`);
+      } catch { console.log("   ⚠ reembed didn't finish — run later: auralis reembed"); }
+    } else console.log("   ⚠ still downloading — later, when `auralis sidecar` shows ✅, run: auralis reembed");
+  }
+
+  console.log("\n✓ setup complete — `auralis doctor` any time to re-check\n");
+  await doctor();
+}
+
+// one-shot backfill of the vector table (used by setup; safe to re-run — it rebuilds idempotently)
+async function reembed() {
+  const token = existsSync(ENV_ORACLE) ? (readFileSync(ENV_ORACLE, "utf8").match(/^ORACLE_TOKEN=(.+)$/m)?.[1] ?? "") : "";
+  try {
+    const r = await (await fetch(`${ORACLE}/api/reembed`, { method: "POST", headers: token ? { authorization: `Bearer ${token}` } : {}, signal: AbortSignal.timeout(600_000) })).json();
+    if (r.error) return fail(`reembed: ${r.error}`);
+    console.log(`✓ reembedded ${r.embedded}/${r.docs} docs (embedder=${r.embedder}, fallbacks=${r.embed_fallbacks ?? 0})`);
+  } catch (e) { fail(`oracle unreachable or reembed failed: ${String(e).slice(0, 120)}`); }
+}
+
 async function start() {
   const share = rest.includes("--share");
   // studio ships the dashboard's production build — build it if missing (host-build keeps the image tiny).
@@ -179,7 +269,7 @@ async function doctor() {
   checks.push(["compose file", existsSync(join(ROOT, "docker-compose.yml"))]);
   checks.push(["dashboard dist", existsSync(join(ROOT, "dashboard/dist/index.html"))]);
   checks.push(["oracle reachable", await health()]);
-  checks.push(["token set", !!process.env.ORACLE_TOKEN]);
+  checks.push(["token set", !!TOKEN]);
   checks.push(["reboot: orbstack start-at-login", orbLogin]);
   checks.push(["backup: sqlite3 present", sh(["sqlite3", "--version"], { stdio: "ignore" }).status === 0]);
   checks.push(["backup: daily schedule installed", existsSync(PLIST)]);
@@ -193,6 +283,8 @@ async function doctor() {
 const fail = (msg) => { console.error(`✗ ${msg}`); process.exit(1); };
 
 switch (cmd) {
+  case "setup": await setup(); break;
+  case "reembed": await reembed(); break;
   case "start": await start(); break;
   case "stop": compose("down"); break;
   case "status": await status(); break;
@@ -211,6 +303,7 @@ switch (cmd) {
   case "doctor": await doctor(); break;
   default:
     console.log("auralis — production stack CLI\n");
+    console.log("  auralis setup [--no-semantic]  ONE command: prereq check → deps → auth → sidecar → stack → backup");
     console.log("  auralis start [--share]   up as daemons (+public tunnel with --share)");
     console.log("  auralis stop              down (brain data survives)");
     console.log("  auralis status            services + brain stats");

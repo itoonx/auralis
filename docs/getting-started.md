@@ -1,10 +1,9 @@
 # Getting started — install auralis and use it from Claude Code
 
-The complete walkthrough: zero → running stack → your Claude Code CLI wired into the shared brain.
-Every command here is copy-pasteable; nothing assumes prior context. (Ops depth: [production.md](production.md) ·
-MCP/capture internals: [mcp.md](mcp.md) · every command and env var: [reference.md](reference.md))
+Zero → running stack → your Claude Code CLI wired into the shared brain. (Ops depth:
+[production.md](production.md) · MCP/capture internals: [mcp.md](mcp.md) · every command: [reference.md](reference.md))
 
-## 0 · Prerequisites
+## 0 · Prerequisites (the only manual part)
 
 | Need | Why | Check |
 |---|---|---|
@@ -13,25 +12,39 @@ MCP/capture internals: [mcp.md](mcp.md) · every command and env var: [reference
 | Docker daemon (OrbStack recommended on macOS) | the production stack (brain + studio) | `docker ps` |
 | sqlite3 CLI | WAL-safe backups | `sqlite3 --version` |
 | **Claude Code, logged in** | fleet workers and MCP tools reuse your login — no API key | `claude --version` |
-| *(optional)* Python 3.10+ | semantic recall sidecar (BGE-M3) — skip it and the brain still works, lexical-only | `python3 --version` |
+| *(optional)* Python 3.10+ | semantic recall sidecar (BGE-M3) — without it the brain still works, lexical-only | `python3 --version` |
 
-## 1 · Install & start
+## 1 · One command
 
 ```bash
 git clone https://github.com/itoonx/Auralis && cd Auralis
-pnpm install && pnpm test              # 100+ deterministic tests, no network needed
-node bin/auralis.mjs start             # daemon stack — survives terminal close
+node bin/auralis.mjs setup             # or: setup --no-semantic
 ```
+
+`setup` does everything below by itself, prints each step, and **fails early with a clear list** if a
+prerequisite is missing. It is **idempotent** — re-run it any time; every step skips what already exists:
+
+1. checks the prerequisites above
+2. `pnpm install`
+3. generates auth secrets into `.env.oracle` (gitignored)
+4. *(if python3)* installs the BGE-M3 sidecar into a venv + autostarts it via launchd
+5. starts the stack (builds the dashboard on first run, waits for healthy)
+6. schedules the daily 04:00 WAL-safe backup
+7. embeds your brain semantically (first run downloads ~4.6GB of model weights; if that's still
+   going, setup hands off — run `node bin/auralis.mjs reembed` when `auralis sidecar` shows ✅)
 
 You now have:
 - **studio** (dashboard) → http://localhost:47780
-- **brain API** → http://localhost:47778 (bound to 127.0.0.1 only)
+- **brain API** → http://localhost:47778 (127.0.0.1 only, bearer-token auth on)
 - data in `.auralis-out/` (bind mount — survives rebuilds and `auralis stop`)
 
-Tip: alias it — `alias auralis="node $(pwd)/bin/auralis.mjs"`. `auralis status` / `logs` / `stop` work
-like any daemon CLI. `auralis doctor` prints a readiness checklist (docker, ports, backups, reboot).
+Tip: alias it — `alias auralis="node $(pwd)/bin/auralis.mjs"`. Then `auralis status` / `logs` / `stop` /
+`doctor` (readiness checklist) work like any daemon CLI.
 
-## 2 · Turn on auth (recommended before any tunnel/LAN exposure)
+**Sections 2–3 below explain what `setup` just did** — read them when you need to customise; skip
+straight to [§4](#4--use-it-from-claude-code-cli) to wire in Claude Code.
+
+## 2 · Auth — what setup configured (manual path)
 
 Secrets live in **`.env.oracle`** (gitignored) — *not* `.env`: Bun auto-loads `.env` into every scratch
 oracle the tests spawn, so prod secrets must stay out of it.
@@ -51,7 +64,7 @@ docker compose up -d --force-recreate oracle               # container reads .en
 - `/health` stays open; everything else 401s without a credential. The studio keeps working — its nginx
   injects the token on the proxy hop server-side (the browser never sees it).
 
-## 3 · Semantic recall (optional, recommended) — BGE-M3 + reranker
+## 3 · Semantic recall — what setup configured (manual path)
 
 Lexical recall misses paraphrases ("herbs I grow" never matches "fresh basil"). The semantic sidecar fixes
 that — measured: paraphrase recall ~0% (lexical) → 88% (BGE-M3 dense) → 96% with the reranker.
