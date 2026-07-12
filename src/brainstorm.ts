@@ -14,6 +14,7 @@ export interface BrainstormResult {
   synthesis: string;
   converged: "vote-stable" | "no-change" | "max-rounds";
   roundsUsed: number;
+  dropped: string[]; // panelists that failed a round (provider error / out of credits) — surfaced, never silent
 }
 
 export interface BrainstormOpts {
@@ -70,24 +71,36 @@ export async function brainstorm(topic: string, panel: Panelist[], synthesizer: 
   const maxRounds = Math.max(1, opts.rounds ?? 3);
   const ev = opts.onEvent;
   const rounds: RoundEntry[][] = [];
+  const dropped = new Set<string>();
+
+  // Run one panelist, tolerating a provider failure (429 / out of credits / network). A multi-vendor panel
+  // must not let one dead provider nuke the whole round — the survivors carry on, and the drop is COUNTED
+  // and surfaced (never silent). ponytail: re-attempts every round, so a permanently-down provider just
+  // keeps dropping; skip-known-dead if the wasted calls ever matter.
+  const runSafe = async (p: Panelist, prompt: string): Promise<RoundEntry | null> => {
+    try {
+      const entry = parseEntry(p.name, await p.run(prompt));
+      ev?.("finding", p.name, `${p.name}: ${(entry.vote || entry.idea).slice(0, 90)}`);
+      return entry;
+    } catch (e) {
+      dropped.add(p.name);
+      ev?.("dropped", p.name, `${p.name} dropped: ${String((e as Error).message).slice(0, 90)}`);
+      return null;
+    }
+  };
 
   // round 0 — independent proposals (no cross-talk; diversity first)
   ev?.("phase", "panel", `round 1/${maxRounds} · ${panel.length} models proposing independently`);
-  rounds.push(await Promise.all(panel.map(async (p) => {
-    const entry = parseEntry(p.name, await p.run(PROPOSE(topic)));
-    ev?.("finding", p.name, `${p.name}: ${entry.idea.slice(0, 90)}`);
-    return entry;
-  })));
+  const first = (await Promise.all(panel.map((p) => runSafe(p, PROPOSE(topic))))).filter(Boolean) as RoundEntry[];
+  if (!first.length) throw new Error("every panelist failed on round 0 (check API keys / credits)");
+  rounds.push(first);
 
   let converged: BrainstormResult["converged"] = "max-rounds";
   for (let r = 1; r < maxRounds; r++) {
     const board = rounds[rounds.length - 1];
     ev?.("phase", "panel", `round ${r + 1}/${maxRounds} · critique + revise`);
-    const next = await Promise.all(panel.map(async (p) => {
-      const entry = parseEntry(p.name, await p.run(CRITIQUE(topic, board)));
-      ev?.("finding", p.name, `${p.name}: ${entry.vote || entry.idea.slice(0, 90)}`);
-      return entry;
-    }));
+    const next = (await Promise.all(panel.map((p) => runSafe(p, CRITIQUE(topic, board))))).filter(Boolean) as RoundEntry[];
+    if (!next.length) break; // whole panel failed this round → stop with what we have
     rounds.push(next);
     // no substantive change this round → done
     if (ideaSig(next) === ideaSig(board)) { converged = "no-change"; break; }
@@ -97,5 +110,5 @@ export async function brainstorm(topic: string, panel: Panelist[], synthesizer: 
 
   ev?.("phase", "synthesizer", `synthesizing from ${rounds.length} round(s) (${converged})`);
   const synthesis = (await synthesizer.run(SYNTHESIZE(topic, rounds))).trim();
-  return { topic, rounds, synthesis, converged, roundsUsed: rounds.length };
+  return { topic, rounds, synthesis, converged, roundsUsed: rounds.length, dropped: [...dropped] };
 }

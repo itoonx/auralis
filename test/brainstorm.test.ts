@@ -60,4 +60,17 @@ describe("brainstorm engine (M6)", () => {
     expect(res.roundsUsed).toBe(2); // solo repeats its reply → round 2 == round 1 → no-change
     await expect(brainstorm("q", [], scripted("s", ["b"]))).rejects.toThrow(/at least one/);
   });
+
+  const failing = (name: string): Panelist => ({ name, run: async () => { throw new Error("boom 429 no credits"); } });
+
+  it("survives a failing panelist: survivors carry on, the drop is recorded (not silent)", async () => {
+    const res = await brainstorm("q", [scripted("m1", [J("a", "a"), J("a", "a")]), failing("bad")], scripted("s", ["brief"]), { rounds: 2 });
+    expect(res.dropped).toContain("bad");
+    expect(res.rounds[0].map((e) => e.name)).toEqual(["m1"]); // only the survivor is on the board
+    expect(res.synthesis).toContain("brief");
+  });
+
+  it("throws only when EVERY panelist fails round 0", async () => {
+    await expect(brainstorm("q", [failing("a"), failing("b")], scripted("s", ["x"]))).rejects.toThrow(/every panelist failed/);
+  });
 });

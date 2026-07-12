@@ -61,18 +61,20 @@ async function main() {
 
   const result = await brainstorm(topic, panel.map(panelist), panelist(synth), {
     rounds,
-    onEvent: (_k, name, human) => console.error(`  ${human}`),
+    onEvent: (kind, _name, human) => console.error(kind === "dropped" ? `  ⚠ ${human}` : `  ${human}`),
   });
 
   console.log(`\n${"═".repeat(70)}\n🧠 SYNTHESIS (${result.converged}, ${result.roundsUsed} round${result.roundsUsed > 1 ? "s" : ""})\n${"═".repeat(70)}\n${result.synthesis}\n`);
+  if (result.dropped.length) console.error(`⚠ dropped (no contribution): ${result.dropped.join(", ")} — check their keys/credits`);
 
   // LEARN — "จนกว่าจะได้เรียนรู้": the brief becomes a recallable decision-style memory, project-scoped.
   if (process.env.AURALIS_BRAINSTORM_NO_LEARN !== "1") {
     try {
       const brain = new OracleAdapter();
+      const contributors = (result.rounds.at(-1) ?? []).map((e) => e.name); // who actually spoke, not who was configured
       const pattern =
         `Brainstorm decision — ${topic}\n` +
-        `Panel: ${panel.map((s) => s.model ?? s.vendor).join(", ")} (${result.converged} in ${result.roundsUsed} rounds)\n` +
+        `Panel: ${contributors.join(", ")}${result.dropped.length ? ` (dropped: ${result.dropped.join(", ")})` : ""} (${result.converged} in ${result.roundsUsed} rounds)\n` +
         `Best answer & rationale:\n${result.synthesis}`;
       const { id } = await brain.learn(pattern, { project: PROJECT, concepts: ["brainstorm", "decision"], source: "auralis:brainstorm", pinned: true });
       console.error(`✓ learned into the brain (${id}) — recallable in every future session`);
