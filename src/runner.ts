@@ -22,9 +22,9 @@ export interface AgentRunner {
   run(prompt: string): Promise<RunResult>;
 }
 
-const EXPLORE_TOOLS = new Set(["Read", "Grep", "Glob"]);
-const WRITE_TOOLS = new Set(["Write", "Edit"]); // tracked only in build mode
-function targetOf(name: string, input: any): string | undefined {
+export const EXPLORE_TOOLS = new Set(["Read", "Grep", "Glob"]);
+export const WRITE_TOOLS = new Set(["Write", "Edit"]); // tracked only in build mode
+export function targetOf(name: string, input: any): string | undefined {
   if (name === "Read" || name === "Write" || name === "Edit") return input?.file_path;
   if (name === "Grep" || name === "Glob") return input?.pattern ?? input?.path;
   return undefined;
