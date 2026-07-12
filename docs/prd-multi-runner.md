@@ -217,7 +217,8 @@ defend    (the author rebuts or concedes)
 judge     (a NON-author rules PROCEDURALLY: did the defense answer the attack? — NOT "which idea is best")
 synthesize the survivor + graft the strengths of the sunk → LEARN (scar record, not just the verdict)
 ```
-Winner = highest **survivability**, not most votes. **There is no vote.** Invariant:
+Winner = highest **survivability**, not most votes. **There is no vote.** (Survivability *alone* ≠ truth —
+see **Correction** below, folded in from the M8-on-M8 panel test.) Invariant:
 **author ≠ challenger ≠ judge** on the same proposal. Challenger = `critic` role, judge = `reviewer`
 role — both already resolve per-model (M5's `AURALIS_CRITIC_RUNNER` / `AURALIS_REVIEWER_RUNNER`); make
 the judge a **cross-family** referee of the *argument*, not a decider of *truth*.
@@ -231,6 +232,32 @@ poisons *every* future debate, so each plug is load-bearing):
 | Shared ground can't be wrong if it can't be challenged | One challenger **red-teams the PREMISE**, not a proposal: "what assumption in the task itself is false?" |
 | Judge has substantive bias | Judge rules **procedurally** (was the defense responsive?); truth is decided by *what survives*, the judge only certifies the survival was legitimate |
 | No attack landed | **Suspicious, not safe** — force a *steelman-the-opposite* pass before crystallizing; only then crystallize high-margin |
+
+**Correction — survival ≠ truth** (folded in from the M8-on-M8 panel test, 2026-07-13 — running
+`/brainstorm` claude+gpt on *this* design surfaced the flaw; kept as supersede-with-provenance, per the
+design's own rule). The load-bearing hole is the **procedural judge**: ruling "was the defense
+responsive?" rewards the most *fluent* rebuttal, not the correct one — so a scarred claim certifies
+*debate quality, not correctness*, and compounding then weaponizes an articulate-but-wrong crystal
+(margin/supersede are **reactive** — they fire only after a contradiction surfaces, which compounding
+buries). Fix, **without installing a truth-oracle**:
+- **Evidence-gated crystallization.** The **challenger** (not the author) defines a *falsifying test*. A
+  claim becomes **settled** ground only if it PASSED that test; a claim that merely out-argued its
+  challenge crystallizes as **provisional**, never settled. This breaks the "articulate = true" coupling
+  at the moment of crystallization, before compounding can amplify it.
+- **Give the provisional lane teeth.** "Cheap to reopen" must be *mechanics, not a label*: explicit
+  reopen triggers + **margin decay by time/use** — or provisional crystals calcify into the very
+  entrenchment we were fixing.
+- **Guard the test too.** Challenger-defined tests can be gamed (impossible bar / strawman) → the judge
+  also rules the *test* fair (procedurally); contested **evidence** just keeps the claim provisional
+  rather than spawning a sub-dialectic (bounds the "prove the proof" regress).
+- **Scope honesty.** Evidence-poor work — design taste, values, forecasts — has no falsifying test, so it
+  stays **provisional by rule** (*this design doc included*). Evidence-gating sharpens convergent,
+  testable claims; it does not manufacture certainty where none exists.
+
+> Rejected head-on alternative (also from the panel): "make the judge rule on *substance/truth*." It
+> reinstalls the single point of failure the three-role split exists to avoid — it relocates the oracle
+> from author to judge instead of removing it. Evidence-gating keeps judging procedural but moves the
+> truth-check to an **external, author-independent test**.
 
 **Two modes — this is where the forum idea lives (scoped to where it helps):**
 - **`converge`** (default): the dialectic above → the best *defensible* answer. For decisions / design / bug-hunts.
