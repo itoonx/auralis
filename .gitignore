@@ -15,3 +15,6 @@ dist/
 .DS_Store
 .astro/
 .env.oracle
+
+# local /brainstorm panel preference (which models to spend on) — not shared
+auralis.config.json
