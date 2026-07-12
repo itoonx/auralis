@@ -18,6 +18,8 @@ export const GLYPH: Record<string, string> = {
   trace: "»", // a single tool step (worker Read/Grep/Write, or a session-capture file edit)
   prompt: "🗣", // session capture: what the human asked
   answer: "✦", // session capture: the assistant's conclusion
+  dropped: "✗", // brainstorm: a panelist failed a round (provider error) — surfaced, never silent
+  flip: "↷", // brainstorm: a panelist changed its vote between rounds (the position-flow signal)
 };
 
 // The stored human line: glyph + body. Body is already a concise, person-readable sentence.

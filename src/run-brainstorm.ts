@@ -15,6 +15,7 @@ import { preflightPanel } from "./brainstorm-preflight";
 import { parseSpec, keyFor, PRESETS, loadConfig, type RunnerSpec } from "./runners";
 import { ApiRunner } from "./runner";
 import { OracleAdapter } from "./memory";
+import { makeEmitter } from "./narrate";
 
 const PROJECT = process.env.AURALIS_PROJECT ?? "default";
 
@@ -79,10 +80,48 @@ async function main() {
   if (pf.excluded.length) console.error(`⚠ running without: ${pf.excluded.map((e) => e.name).join(", ")} — fix keys/credits to include them`);
   console.error(`🧠 brainstorm: ${pf.panel.map((s) => s.model ?? s.vendor).join(" · ")} → synth ${pf.synth.model ?? pf.synth.vendor} · ≤${rounds} rounds\n`);
 
+  // Timeline wiring — the studio replays a brainstorm like any fleet run. Best-effort by construction
+  // (makeEmitter swallows a dead oracle), so observability can never block or slow the debate.
+  const brain = new OracleAdapter();
+  const runId = `brainstorm-${Date.now().toString(36)}`;
+  const emit = makeEmitter({ adapter: brain, runId, project: PROJECT });
+  emit("prompt", "user", topic);
+  pf.excluded.forEach((e) => emit("dropped", e.name, `${e.name} excluded at preflight — ${e.reason}`));
+
   const result = await brainstorm(topic, pf.panel.map(panelist), panelist(pf.synth), {
     rounds,
-    onEvent: (kind, _name, human) => console.error(kind === "dropped" ? `  ⚠ ${human}` : `  ${human}`),
+    onEvent: (kind, name, human) => {
+      console.error(kind === "dropped" ? `  ⚠ ${human}` : `  ${human}`);
+      emit(kind, name, human);
+    },
   });
+
+  // position.delta — who flipped their vote, at which round (the chart's spine, per the observability
+  // design). Derived from result.rounds after the fact: no engine change, order preserved.
+  const norm = (v: string) => v.toLowerCase().replace(/\s+/g, " ").trim();
+  let flips = 0, lastRoundFlips = 0;
+  for (let r = 1; r < result.rounds.length; r++) {
+    for (const e of result.rounds[r]) {
+      const prev = result.rounds[r - 1].find((p) => p.name === e.name);
+      if (prev && e.vote && prev.vote && norm(prev.vote) !== norm(e.vote)) {
+        flips++;
+        if (r === result.rounds.length - 1) lastRoundFlips++;
+        emit("flip", e.name, `${e.name} flipped (round ${r + 1}): "${prev.vote.slice(0, 60)}" → "${e.vote.slice(0, 60)}"`);
+      }
+    }
+  }
+
+  // Trust badge — flip TIMING, not count (earned = flipped under challenge then settled; groupthink =
+  // agreement that was never challenged; unstable = still churning at the cap).
+  // ponytail: v1 heuristic, thresholds calibrate on real runs — the chart milestone owns tuning.
+  const badge =
+    pf.panel.length < 2 ? "solo (single panelist — no cross-examination)"
+    : result.converged === "max-rounds" && lastRoundFlips > 0 ? "unstable — still flipping in the final round; debate never closed"
+    : flips === 0 ? "groupthink? — converged with zero flips; agreement was never challenged"
+    : "earned — flipped under challenge, then settled";
+  emit("note", "trust", `trust: ${badge} (${flips} flip${flips === 1 ? "" : "s"}, ${result.converged}, ${result.roundsUsed} rounds)`);
+  emit("answer", "synthesizer", `${result.converged} in ${result.roundsUsed} round(s) — ${result.synthesis.slice(0, 200)}`);
+  console.error(`\n🎖 trust: ${badge}`);
 
   console.log(`\n${"═".repeat(70)}\n🧠 SYNTHESIS (${result.converged}, ${result.roundsUsed} round${result.roundsUsed > 1 ? "s" : ""})\n${"═".repeat(70)}\n${result.synthesis}\n`);
   if (result.dropped.length) console.error(`⚠ dropped (no contribution): ${result.dropped.join(", ")} — check their keys/credits`);
@@ -90,7 +129,6 @@ async function main() {
   // LEARN — "จนกว่าจะได้เรียนรู้": the brief becomes a recallable decision-style memory, project-scoped.
   if (process.env.AURALIS_BRAINSTORM_NO_LEARN !== "1") {
     try {
-      const brain = new OracleAdapter();
       const contributors = (result.rounds.at(-1) ?? []).map((e) => e.name); // who actually spoke, not who was configured
       const pattern =
         `Brainstorm decision — ${topic}\n` +

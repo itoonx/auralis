@@ -149,6 +149,32 @@ doesn't stop until the outcome is *learned*.
 > guard (deferred to a `max_tokens` cap + truncation flag). The panel is the *simultaneous* engine — M8
 > evolves it into an adversarial one.
 
+**Observability (designed by the claude+gpt panel, wired 2026-07-13).** Principle: record **state
+changes, not the transcript firehose** — a model that never moves emits nothing; silence is the signal.
+
+- **Events (SHIPPED):** every run binds `narrate.ts` → the shared timeline, so the studio replays a
+  brainstorm like any fleet run. Emitted: `prompt` (topic) · `phase` (round boundaries) · `finding`
+  (per-panelist idea/vote) · `dropped` (preflight exclusions + mid-run provider failures) · `flip`
+  (**the spine** — who changed their vote, at which round, derived from the round board) · `note`
+  (trust badge) · `answer` (convergence + synthesis head). Best-effort by construction: a dead oracle
+  can't slow or break a debate.
+- **Trust badge (SHIPPED, v1 heuristic):** one indicator from flip *timing*, not flip count —
+  **earned** (flipped under challenge, then settled) / **groupthink?** (converged with zero flips —
+  agreement never challenged) / **unstable** (still flipping in the final round) / **solo**. Known v1
+  limit, observed on the first live run: a *reworded* vote counts as a flip ("Spaces, 2 per indent" →
+  "Spaces (2), enforced by Prettier" scored unstable) — vote normalization is wording-sensitive.
+  Calibration belongs to the chart milestone; thresholds stay tunable, not constants.
+- **Primary UI (LATER, studio milestone): position-flow line chart** — X = rounds, Y = stance, one line
+  per model; lines meeting = convergence, a jump = a flip, a flat line = a holdout; each turn-node
+  clicks open to the actual argument text (the transcript is demoted to drill-down, not lost). Rejected
+  as the front door: transcript (*is* the noise), swimlanes (activity, not positions), argument graph
+  (expert hairball — keep as an expert drill-down later), scoreboard (outcome without process).
+  Open risk to solve before building: the Y-axis assumes stance reduces to a comparable label — have
+  the synthesizer emit a **normalized stance label per model per round** (fixes the badge's rewording
+  false-flips too); when stance can't be reduced, fall back to transcript rather than draw a false line.
+- **Not tracked yet:** per-call token/cost attribution (ApiRunner discards `usage`) — one per-run cost
+  rollup line lands with the cost guard.
+
 **Shortcut that reorders the plan:** brainstorming is **tool-less** (thinking, not exploring files) —
 so the engine needs only `ApiRunner` (exists) + the Claude runner, NOT the M1 ToolLoopRunner. M6 can
 land right after M2's config parsing, in parallel with M1.
