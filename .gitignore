@@ -10,6 +10,8 @@ dist/
 # per Claude Code's settings.json (team) vs settings.local.json (private) convention.
 .claude/*
 !.claude/settings.json
+!.claude/commands/
+!.claude/commands/*
 .DS_Store
 .astro/
 .env.oracle

@@ -18,6 +18,7 @@
     "embed": "tsx src/embed-sidecar.ts",
     "distill": "tsx src/run-distill.ts",
     "recall": "tsx src/run-recall.ts",
+    "brainstorm": "tsx src/run-brainstorm.ts",
     "help": "tsx src/help.ts",
     "analyze": "tsx src/run-analyze.ts",
     "bench-graph": "tsx src/run-bench-graph.ts",
