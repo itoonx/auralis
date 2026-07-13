@@ -35,6 +35,26 @@ your goal ─► Planner ─► dependency DAG ─► Workers ×N — concurrent
 
 Full flow: **[the task loop](docs/platform.md#the-task-loop--what-actually-happens-per-task)**.
 
+## Every role, any model — and they argue on purpose
+
+Pick the model per role in one config file: Claude plans, GPT grades every worker answer, Claude
+hunts defects in what got built — multiple vendors in one run, all on the same replayable timeline.
+
+```jsonc
+// auralis.config.json
+{ "runners": { "worker": "claude:claude-opus-4-8", "critic": "gpt:gpt-5.6-sol",
+               "reviewer": "claude:claude-opus-4-8" } }
+```
+
+- **`/brainstorm`** — a multi-model panel proposes independently, critiques, and converges; the decision
+  brief is **learned into the brain** with a trust badge (earned / groupthink? / unstable) computed from
+  *when* positions flipped, not how loud anyone argued
+- **Dialectic mode** — proposals are *attacked* by a non-author, defended, and ruled on by a third-party
+  judge; what survives is stored **with its scar record** (which attacks it survived, what was conceded) —
+  because a claim that was never challenged should never look settled
+- A provider with no key or no credit is **excluded before round 0, loudly** — and one dead provider
+  never kills the debate
+
 ## Benchmarks
 
 **The memory layer vs the alternatives** — LongMemEval (90 questions, ~120k-token histories), controlled

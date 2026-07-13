@@ -159,7 +159,13 @@ export class ToolLoopRunner implements AgentRunner {
       }
     };
 
-    const messages: any[] = [{ role: "user", content: prompt }];
+    // Evidence discipline — found live (M3): gpt-5.4-mini did the work correctly but ANSWERED with
+    // meta-talk ("Done — the file has been written"), so the LLM critic rejected every summary and the
+    // brain captured nothing. Claude workers self-corrected after one rejection; small API models don't.
+    const messages: any[] = [
+      { role: "system", content: "You are a worker agent on a coding fleet. Use the tools to do the work — never merely describe it. Your FINAL message is a report to a strict reviewer: it must carry concrete evidence (quote the exact content you wrote, or the exact facts you found, with file paths). Unevidenced claims like 'the file has been written' are rejected." },
+      { role: "user", content: prompt },
+    ];
     const tools = toolDefs(build, !!cfg.brain);
     let result = "";
     let turns = 0;

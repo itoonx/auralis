@@ -75,6 +75,22 @@ Full list + defaults in `.env.example`. The ones that matter most:
 | `AURALIS_ACCEPT` | the acceptance spec (`rps` \| `todo`); set it in build mode to **close the loop** — `pnpm dev` validates the output and reworks on FAIL |
 | `AURALIS_BUILD_RETRIES` | extra fleet reworks when acceptance fails (default 1) |
 
+**Multi-model roles — which model runs which layer** (spec format `vendor[:model]`, e.g.
+`claude:claude-opus-4-8`, `gpt:gpt-5.6-sol`, `glm:glm-4-plus`; billing keys `OPENAI_API_KEY` /
+`GLM_API_KEY` live in `.env` or the shell — never `.env.oracle`. File defaults live in
+`auralis.config.json` → `runners`; env always wins. LLM critic/reviewer are **opt-in**: unset = free
+heuristic, no silent spend.)
+| Variable | Effect |
+|---|---|
+| `AURALIS_RUNNER` | the worker runner (`claude` keeps Agent SDK + MCP brain; `gpt`/`glm`/`api-compat` get the native tool loop — same tool names, same claims, same brain) |
+| `AURALIS_CRITIC_RUNNER` | an LLM grades every worker answer for substance (heuristic pre-filters garbage free); rejects feed self-repair; fail-open named in the verdict |
+| `AURALIS_REVIEWER_RUNNER` | after acceptance passes, a tool-running reviewer reads the built files and hunts defects; findings feed the same rework loop |
+| `AURALIS_PLANNER_RUNNER` / `AURALIS_SYNTHESIS_RUNNER` | same knob for the planner / synthesis layers |
+| `AURALIS_BRAINSTORM_PANEL` | `/brainstorm` panel, comma-separated specs (or config `runners.brainstorm`) |
+| `AURALIS_BRAINSTORM_MODE=converge` | the M8 dialectic (propose → challenge → defend → judge → synthesize; the crystal is LEARNED as PROVISIONAL with its scar record) instead of the simultaneous panel |
+| `AURALIS_BRAINSTORM_JUDGE` | the dialectic judge — must be distinct from every panelist (cross-family recommended); preflighted like any paid provider |
+| `AURALIS_BRAINSTORM_ROUNDS` / `_SYNTH` / `_NO_LEARN=1` | panel round cap · synthesizer spec · skip the LEARN step |
+
 **Production brain (oracle) — secrets live in `.env.oracle`, gitignored**
 | Variable | Effect |
 |---|---|
