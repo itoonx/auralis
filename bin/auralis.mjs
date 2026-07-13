@@ -49,14 +49,24 @@ const PLIST = join(homedir(), "Library", "LaunchAgents", "dev.auralis.backup.pli
 const BRAIN = join(ROOT, ".auralis-out", "brain.sqlite");
 
 function backup() {
-  if (!existsSync(BRAIN)) return fail(`brain not found: ${BRAIN}`);
   mkdirSync(DAILY_DIR, { recursive: true });
   const ts = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19); // 2026-07-10T11-50-00
   const out = join(DAILY_DIR, `brain-${ts}.db`);
-  // WAL-safe: SQLite's online-backup API via the sqlite3 CLI — NOT `cp` (a raw copy of a live WAL'd db
-  // corrupts; found live while a daemon held it open). LanceDB vectors are re-derivable by re-embedding
-  // the docs, so the sqlite brain (source of truth) IS the whole backup.
-  if (sh(["sqlite3", BRAIN, `.backup ${out}`]).status !== 0 || !existsSync(out)) return fail("sqlite3 .backup failed");
+  // Docker mode (the production stack): the brain lives in a named volume that ONLY the container may
+  // touch — SQLite locking doesn't hold across the macOS VM boundary, so a host-side sqlite3 on the same
+  // file is exactly the two-writer hazard that corrupted prod (2026-07-13 post-mortem). Back up from
+  // INSIDE the container via VACUUM INTO, landing on the bind mount so the host keeps the file.
+  // Host mode (no docker): SQLite's online-backup API via the local sqlite3 CLI, as before.
+  const dockerUp = composeJson().some((s) => s.Service === "oracle" && /run|health/i.test(`${s.State ?? ""} ${s.Status ?? ""}`));
+  if (dockerUp) {
+    const rel = `.auralis-out/backups/daily/brain-${ts}.db`;
+    const r = sh(["docker", "compose", "exec", "-T", "oracle", "bun", "-e",
+      `const{Database}=require("bun:sqlite");const d=new Database(process.env.ORACLE_DB??"/data/brain.sqlite",{readonly:true});d.exec("VACUUM INTO '/app/${rel}'")`]);
+    if (r.status !== 0 || !existsSync(out)) return fail("in-container backup (VACUUM INTO) failed");
+  } else {
+    if (!existsSync(BRAIN)) return fail(`brain not found: ${BRAIN} (and the docker oracle isn't running)`);
+    if (sh(["sqlite3", BRAIN, `.backup ${out}`]).status !== 0 || !existsSync(out)) return fail("sqlite3 .backup failed");
+  }
   // Verify the copy — found live 2026-07-13: the brain corrupted mid-week and the nightly backup COPIED
   // the corruption without a word, so the "latest backup" was as dead as the brain. A backup that
   // doesn't integrity-check is a hope, not a backup.

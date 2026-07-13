@@ -20,13 +20,41 @@ semantic sidecar on the host under launchd for GPU (MPS) embedding — ~10× fas
 ```bash
 node bin/auralis.mjs status    # services + health + brain stats (docs · edges · vectors)
 node bin/auralis.mjs logs [svc] [-f]
-node bin/auralis.mjs stop      # down; the brain survives (bind mount ./.auralis-out)
-node bin/auralis.mjs backup    # WAL-safe snapshot now · backup --install = daily 04:00 (launchd)
+node bin/auralis.mjs stop      # down; the brain survives (named volume auralis-brain)
+node bin/auralis.mjs backup    # verified snapshot now · backup --install = daily 04:00 (launchd)
 node bin/auralis.mjs sidecar   # semantic sidecar health · sidecar --install = launchd KeepAlive (host path)
 node bin/auralis.mjs reembed   # rebuild the vector table for every doc (after switching embedders)
 node bin/auralis.mjs doctor    # readiness: docker, ports, token, sidecar, backups, reboot
 node bin/auralis.mjs start --share   # + a public cloudflared tunnel for the studio (explicit opt-in)
 ```
+
+## Brain storage & recovery
+
+The brain (`brain.sqlite` + vectors) lives in the **named volume `auralis-brain`** with exactly one
+writer: the oracle container. Post-mortem 2026-07-13 — it used to be a bind mount, and SQLite locking
+does not hold across the macOS VM boundary: a host process touching the same file (a stray local oracle
+racing the daemon) corrupted the btree, and that night's backup silently copied the corruption.
+Three guarantees now stand:
+
+1. **One writer** — the host cannot reach the DB file; `ensureOracle` refuses to auto-spawn a local
+   oracle on the prod path (it tells you to `auralis start` instead; scratch runs set `ORACLE_DB`).
+2. **Verified backups** — `auralis backup` runs *inside* the container (`VACUUM INTO` → the host
+   `./.auralis-out/backups/daily/` bind mount) and every copy must pass `PRAGMA integrity_check` or the
+   command fails loudly. A corrupt source can no longer produce a quiet dead backup.
+3. **Boot refuses corruption** — the server won't serve a malformed brain (preserves a forensic copy).
+
+If the worst happens anyway:
+
+```bash
+docker compose stop oracle
+docker run --rm -v auralis_auralis-brain:/data -v "$PWD":/host alpine sh -c \
+  "apk add -q sqlite && sqlite3 /data/brain.sqlite .recover | sqlite3 /host/recovered.db"
+sqlite3 recovered.db "INSERT INTO docs_fts(docs_fts) VALUES('rebuild'); PRAGMA integrity_check;"  # expect: ok
+docker run --rm -v auralis_auralis-brain:/data -v "$PWD":/host alpine cp /host/recovered.db /data/brain.sqlite
+docker compose up -d oracle && node bin/auralis.mjs backup
+```
+
+Or restore the newest **verified** daily: copy it over `/data/brain.sqlite` the same way, then `reembed`.
 
 ## Security
 

@@ -40,6 +40,19 @@ export async function ensureOracle(): Promise<() => void> {
   if (await oracleReachable()) return () => stops.forEach((s) => s());
   // NEVER ORACLE_RESET here: a fleet run shares the ACCUMULATED brain — wiping it, and worse racing the real
   // daemon on the default path, is what corrupted prod once (dogfooding). No daemon up → start one, no reset.
+  //
+  // And NEVER auto-spawn on the PROD brain path (2026-07-13 post-mortem): the Docker daemon was briefly
+  // unreachable mid-restart, this spawn raced it on the same bind-mounted brain.sqlite, and SQLite locking
+  // doesn't hold across the macOS VM boundary — the btree shredded. Spawning is allowed only when
+  // ORACLE_DB explicitly points at a scratch brain (benches/tests already do); otherwise fail LOUDLY.
+  const scratchDb = process.env.ORACLE_DB && process.env.ORACLE_DB !== ".auralis-out/brain.sqlite";
+  if (!scratchDb) {
+    stops.forEach((s) => s());
+    throw new Error(
+      "oracle unreachable and refusing to auto-spawn on the prod brain (two writers corrupt SQLite). " +
+      "Start the stack: `node bin/auralis.mjs start` — or point ORACLE_DB at a scratch brain for a local run.",
+    );
+  }
   const child = spawn("bun", ["run", "oracle-lite/server.ts"], { env: { ...process.env }, stdio: sidecarStdio });
   stops.push(() => { try { child.kill(); } catch { /* noop */ } });
   for (let i = 0; i < 60; i++) {

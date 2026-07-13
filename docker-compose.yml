@@ -10,9 +10,17 @@ services:
     ports:
       - "127.0.0.1:47778:47778"
     volumes:
-      # Bind mount, not a named volume: the brain stays greppable/backupable from the host, and the
-      # host-side fleet's timing.jsonl stays readable by the studio's Timing tab.
+      # The BRAIN lives in a named volume — exactly ONE writer domain (this container). It used to be a
+      # bind mount "so the host can grep/backup it", and that is precisely what corrupted it (2026-07-13
+      # post-mortem): SQLite locking does not hold across the macOS VM boundary, so any host process
+      # touching the same file (a stray ensureOracle spawn racing the daemon, a host sqlite3 CLI) can
+      # shred the btree. Backups now run INSIDE the container → written to the bind mount below.
+      - auralis-brain:/data
+      # Bind mount for host-shared, non-SQLite artifacts only: the host fleet's timing.jsonl (append-only
+      # text, single writer) and the backup .db files the container writes out for the host to keep.
       - ./.auralis-out:/app/.auralis-out
+    environment:
+      ORACLE_DB: /data/brain.sqlite
     # Secrets live in .env.oracle (gitignored) — NOT the auto-loaded .env, because Bun auto-loads .env into
     # every `bun run oracle-lite/server.ts` (test/bench scratch oracles included), which would make them
     # demand auth their clients don't send. required:false so a dev without the file still boots (auth off).
@@ -67,3 +75,8 @@ services:
         condition: service_healthy
     restart: unless-stopped
     profiles: ["share"]
+
+volumes:
+  # The brain's single-writer home (see the oracle service comment). Survives container rebuilds;
+  # `docker volume rm` is the only way to lose it — backups land on the host bind mount daily.
+  auralis-brain:
