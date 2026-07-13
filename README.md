@@ -43,17 +43,36 @@ hunts defects in what got built — multiple vendors in one run, all on the same
 ```jsonc
 // auralis.config.json
 { "runners": { "worker": "claude:claude-opus-4-8", "critic": "gpt:gpt-5.6-sol",
-               "reviewer": "claude:claude-opus-4-8" } }
+               "reviewer": "claude:claude-opus-4-8",
+               "brainstorm": ["claude:claude-opus-4-8", "gpt:gpt-5.6-sol"] } }
 ```
 
-- **`/brainstorm`** — a multi-model panel proposes independently, critiques, and converges; the decision
-  brief is **learned into the brain** with a trust badge (earned / groupthink? / unstable) computed from
-  *when* positions flipped, not how loud anyone argued
-- **Dialectic mode** — proposals are *attacked* by a non-author, defended, and ruled on by a third-party
-  judge; what survives is stored **with its scar record** (which attacks it survived, what was conceded) —
-  because a claim that was never challenged should never look settled
-- A provider with no key or no credit is **excluded before round 0, loudly** — and one dead provider
-  never kills the debate
+### `/brainstorm` — a panel of rivals whose conclusion is *remembered*
+
+One slash command: every model proposes **independently** (no anchoring), then they read each other,
+critique, and converge — and the decision brief is **learned into the shared brain**, recallable by
+every future session and fleet worker. Real moment from a live run: GPT opened backing a judge-model,
+read Claude's vote-stability argument, and **flipped** — that's debate, not two monologues.
+
+- **A trust badge you can believe** — computed from *when* positions flipped, never from how loud anyone
+  argued: `earned` (flipped under challenge, then settled) · `unanimous-independent` (agreed before
+  seeing each other) · `unstable` (still churning) · `stalemate`. Consensus theater gets named.
+- **Watch the argument** — the studio's debate view draws the position-flow: one line per model, a lane
+  per stance, flip points ringed; every run replayable end-to-end, forever.
+- A provider with no key or credit is **excluded before round 0, loudly**; one dead provider never
+  kills the debate.
+
+### Dialectic mode — keep what *survives*, not what agrees
+
+`AURALIS_BRAINSTORM_MODE=converge` turns the panel adversarial: every proposal is **attacked** by a
+non-author (the attack is void without a concrete failure scenario), **defended** or conceded, and
+**ruled on** by a third-party judge from another model family. What survives is stored **with its scar
+record** — which attacks it survived, what was conceded, who judged — because a claim that was never
+challenged should never look settled.
+
+It already caught a real design flaw — in *its own spec*: we ran the dialectic on the M8 design and the
+panel refuted its "procedural judge" (rewards fluent rebuttals over correct ones), forcing the
+evidence-gate that shipped instead. The tool debugged its own blueprint before we built it.
 
 ## Benchmarks
 
@@ -98,8 +117,12 @@ More from live runs — full receipts in **[docs/proven.md](docs/proven.md)**:
 - 🤝 **Real coordination** — claims that *prevent* duplicated or clobbered work across any number of agents
 - 🔨 **Build mode** — the fleet writes real programs, verified by an independent harness
 - 💬 **Claude Code, both ways** — your sessions feed the brain; fleet findings surface back in your prompts
-- 📊 **Studio** — every plan, tool call, verdict, and rework on a live, replayable timeline
-- 🔒 **Production-grade** — bearer/JWT auth, 127.0.0.1-only ports, WAL-safe daily backups, reboot-safe daemons
+- ⚔️ **Multi-model debate** — `/brainstorm` panels and adversarial dialectics across Claude/GPT/GLM, with
+  trust badges and scar records; the outcome is learned, not lost
+- 📊 **Studio** — every plan, tool call, verdict, and rework on a live, replayable timeline; runs named by
+  what they did, full history readable, debates drawn as position-flow charts
+- 🔒 **Production-grade** — bearer/JWT auth, 127.0.0.1-only ports, single-writer brain volume,
+  integrity-verified daily backups, reboot-safe daemons
 
 ## Next steps
 
