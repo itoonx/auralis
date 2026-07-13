@@ -706,11 +706,17 @@ const server = Bun.serve({
     // All runs for a project (newest first) with a per-run scorecard — the run history / compare view.
     if (req.method === "GET" && url.pathname === "/api/runs") {
       const project = url.searchParams.get("project");
+      // title = the run's first prompt (the human's ask / the brainstorm topic), else its first phase
+      // (the plan line) — so the list reads "what this run was about", not a runId hash.
       let sql = `SELECT run_id AS runId, COUNT(*) AS events, COUNT(DISTINCT node_id) AS tasks,
         MIN(ts) AS firstTs, MAX(ts) AS lastTs, MAX(seq) AS lastSeq,
         SUM(kind = 'dedup') AS deduped, SUM(kind = 'overlap') AS overlaps,
         SUM(kind = 'repair') AS repairs, SUM(kind = 'note') AS notes,
-        SUM(kind = 'prompt') AS prompts, SUM(kind = 'answer') AS answers
+        SUM(kind = 'prompt') AS prompts, SUM(kind = 'answer') AS answers,
+        (SELECT e2.human FROM events e2 WHERE e2.run_id = events.run_id
+           AND e2.kind IN ('prompt','phase','intent')
+           ORDER BY CASE e2.kind WHEN 'prompt' THEN 0 WHEN 'phase' THEN 1 ELSE 2 END, e2.seq ASC
+           LIMIT 1) AS title
         FROM events`;
       const params: any[] = [];
       if (project) { sql += " WHERE project = ?"; params.push(project); }

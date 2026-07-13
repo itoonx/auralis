@@ -57,6 +57,16 @@ function backup() {
   // corrupts; found live while a daemon held it open). LanceDB vectors are re-derivable by re-embedding
   // the docs, so the sqlite brain (source of truth) IS the whole backup.
   if (sh(["sqlite3", BRAIN, `.backup ${out}`]).status !== 0 || !existsSync(out)) return fail("sqlite3 .backup failed");
+  // Verify the copy — found live 2026-07-13: the brain corrupted mid-week and the nightly backup COPIED
+  // the corruption without a word, so the "latest backup" was as dead as the brain. A backup that
+  // doesn't integrity-check is a hope, not a backup.
+  const chk = sh(["sqlite3", out, "PRAGMA integrity_check;"], { stdio: "pipe", encoding: "utf8" }); // capture — default sh() inherits stdio
+  if (chk.status !== 0 || !String(chk.stdout).trim().startsWith("ok")) {
+    return fail(
+      `backup FAILED integrity_check — the SOURCE brain is likely corrupt. Kept for forensics: ${out}\n` +
+      `  recover: sqlite3 '${BRAIN}' .recover | sqlite3 recovered.db   (then: INSERT INTO docs_fts(docs_fts) VALUES('rebuild');)`,
+    );
+  }
   const kept = readdirSync(DAILY_DIR).filter((f) => /^brain-.*\.db$/.test(f)).sort(); // ISO names sort chronologically
   for (const f of kept.slice(0, -DAILY_KEEP)) unlinkSync(join(DAILY_DIR, f)); // prune oldest beyond KEEP
   console.log(`✓ backup → ${out}  (${Math.min(kept.length, DAILY_KEEP)} kept, max ${DAILY_KEEP})`);

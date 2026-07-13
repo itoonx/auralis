@@ -2,6 +2,7 @@
 // silently rewrite the overview feed on another tab, with an invisible 8/255 background bump as the only
 // feedback). Selection is loud here — outline + "viewing" badge — and "open in overview feed" makes the
 // cross-page effect an explicit action instead of a side effect.
+import { useState } from "react"
 import { ArrowRight, History } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -27,6 +28,10 @@ const TIPS = {
 
 // Session-capture runs have prompts/answers; fleet runs have task counters. Show whichever is real.
 const pa = (r: RunSummary) => ((r.prompts ?? 0) + (r.answers ?? 0) > 0 ? `${r.prompts ?? 0} · ${r.answers ?? 0}` : null)
+
+// The run's human title (its first prompt / plan line), glyph stripped — runId hashes are for copying,
+// not reading. Falls back to "" so callers can decide (list shows runId as the subtitle either way).
+const cleanTitle = (r: RunSummary) => (r.title ?? "").replace(/^\S{1,2}\s+/, "").trim()
 
 function ScoreChips({ r }: { r: RunSummary }) {
   const chip = (label: string, v: number | undefined, cls?: string) =>
@@ -67,7 +72,12 @@ export function RunsPage({ project, tick, selected, onSelect, onOpenInFeed, tl }
   const top = tm.data?.phases.reduce((m, p) => Math.max(m, p.total), 0) || 1
 
   // The shell polls the timeline for the selected run — reuse it for the detail preview (no second fetch).
-  const detailEvents = selected && tl?.run === selected ? [...tl.events].reverse().filter((e) => e.kind !== "trace").slice(0, 8) : null
+  // Default = latest 8 moments; "show all" opens the run's FULL history (tool steps included) so a
+  // finished run stays readable end-to-end instead of vanishing behind the newest one.
+  const [showAllFor, setShowAllFor] = useState("")
+  const showAll = showAllFor === selected
+  const allEvents = selected && tl?.run === selected ? [...tl.events].reverse() : null
+  const detailEvents = allEvents ? (showAll ? allEvents : allEvents.filter((e) => e.kind !== "trace").slice(0, 8)) : null
 
   return (
     <div className="space-y-4 sm:space-y-6">
@@ -111,20 +121,23 @@ export function RunsPage({ project, tick, selected, onSelect, onOpenInFeed, tl }
                           onClick={() => onSelect(r.runId)}
                           className={cn("cursor-pointer", isSel && "bg-primary/8 outline-2 -outline-offset-2 outline-primary/50 hover:bg-primary/10")}
                         >
-                          <TableCell className="font-mono text-xs">
+                          <TableCell className="text-xs">
                             <div className="flex items-center gap-1.5">
                               {/* The row is clickable for mice; this button is the keyboard path (Tab + Enter). */}
                               <button
                                 type="button"
                                 onClick={(e) => { e.stopPropagation(); onSelect(r.runId) }}
-                                title={r.runId}
-                                className="max-w-[300px] truncate rounded text-left hover:underline focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none"
+                                title={cleanTitle(r) || r.runId}
+                                className="max-w-[340px] truncate rounded text-left hover:underline focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none"
                               >
-                                {r.runId}
+                                {cleanTitle(r) || <span className="font-mono">{r.runId}</span>}
                               </button>
                               {isSel && <Badge className="h-4 shrink-0 px-1.5 text-[10px]">viewing</Badge>}
                             </div>
-                            <div className="mt-0.5 text-muted-foreground" title="local time, 24h">{dateTime(r.lastTs)}</div>
+                            <div className="mt-0.5 flex items-center gap-2 font-mono text-[11px] text-muted-foreground">
+                              <span title="local time, 24h">{dateTime(r.lastTs)}</span>
+                              {cleanTitle(r) && <span className="max-w-[180px] truncate opacity-70" title={r.runId}>{r.runId}</span>}
+                            </div>
                           </TableCell>
                           <TableCell className="text-right"><Num v={r.tasks} /></TableCell>
                           <TableCell className="text-right"><Num v={r.deduped} cls="text-amber-400" /></TableCell>
@@ -154,10 +167,10 @@ export function RunsPage({ project, tick, selected, onSelect, onOpenInFeed, tl }
                         )}
                       >
                         <div className="flex items-center gap-1.5">
-                          <span className="min-w-0 truncate font-mono text-xs">{r.runId}</span>
+                          <span className={cn("min-w-0 truncate text-xs", !cleanTitle(r) && "font-mono")}>{cleanTitle(r) || r.runId}</span>
                           {isSel && <Badge className="h-4 shrink-0 px-1.5 text-[10px]">viewing</Badge>}
                         </div>
-                        <div className="mt-1 font-mono text-[11px] text-muted-foreground">{dateTime(r.lastTs)}</div>
+                        <div className="mt-1 truncate font-mono text-[11px] text-muted-foreground">{dateTime(r.lastTs)}{cleanTitle(r) ? ` · ${r.runId}` : ""}</div>
                         <div className="mt-2"><ScoreChips r={r} /></div>
                       </button>
                     </li>
@@ -174,6 +187,7 @@ export function RunsPage({ project, tick, selected, onSelect, onOpenInFeed, tl }
           <Card>
             <CardHeader className="pb-1">
               <SectionTitle>run detail</SectionTitle>
+              {cleanTitle(selRun) && <div className="min-w-0 truncate text-sm" title={cleanTitle(selRun)}>{cleanTitle(selRun)}</div>}
               <div className="flex min-w-0 items-center gap-1.5">
                 <span className="min-w-0 truncate font-mono text-xs text-muted-foreground" title={selRun.runId}>{selRun.runId}</span>
                 <CopyButton text={selRun.runId} label="copy run id" />
@@ -184,15 +198,26 @@ export function RunsPage({ project, tick, selected, onSelect, onOpenInFeed, tl }
               {/* debate runs (/brainstorm) carry position events — the flow chart renders itself only then */}
               {tl?.run === selected && <DebateView events={tl.events} />}
               <div>
-                <h3 className="mb-2 text-xs font-medium text-muted-foreground">latest moments <span className="font-normal">· local 24h · same vocabulary as the overview feed</span></h3>
+                <h3 className="mb-2 flex items-center text-xs font-medium text-muted-foreground">
+                  <span>{showAll ? "full history" : "latest moments"} <span className="font-normal">· local 24h · same vocabulary as the overview feed</span></span>
+                  {allEvents && allEvents.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setShowAllFor(showAll ? "" : selected)}
+                      className="ml-auto shrink-0 rounded border border-border px-1.5 py-0.5 font-normal hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none"
+                    >
+                      {showAll ? "collapse" : `show all ${allEvents.length} events`}
+                    </button>
+                  )}
+                </h3>
                 {detailEvents ? (
-                  <ol className="space-y-1.5">
+                  <ol className={cn("space-y-1.5", showAll && "max-h-[28rem] overflow-y-auto pr-1")}>
                     {detailEvents.length === 0 && <li className="text-sm text-muted-foreground">no events beyond tool steps in this run.</li>}
                     {detailEvents.map((e) => (
                       <li key={e.seq} className="flex items-start gap-2.5 text-sm">
                         <span className="pt-0.5 font-mono text-xs text-muted-foreground tabular-nums" title={e.ts}>{clock(e.ts)}</span>
                         <KindChip kind={e.kind} />
-                        <span className="min-w-0 flex-1 truncate" title={e.human}>{e.human.replace(/^\S+\s/, "")}</span>
+                        <span className={cn("min-w-0 flex-1", showAll ? "break-words" : "truncate")} title={e.human}>{e.human.replace(/^\S+\s/, "")}</span>
                       </li>
                     ))}
                   </ol>

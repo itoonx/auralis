@@ -105,6 +105,9 @@ export interface RunSummary {
   // (the one already deployed) doesn't send them — the table renders "—" until it does.
   prompts?: number;
   answers?: number;
+  // What the run was ABOUT — its first prompt (the ask / brainstorm topic) or first phase (the plan
+  // line), glyph included. Optional for the same older-server reason; the list falls back to runId.
+  title?: string;
 }
 export const getRuns = (project: string, signal?: AbortSignal) =>
   json<{ runs: RunSummary[] }>(`/api/runs?project=${encodeURIComponent(project)}`, signal);
