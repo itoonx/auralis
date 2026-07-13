@@ -329,6 +329,24 @@ depends entirely on proxy quality (the panel labeled this HYPOTHESIS itself). Ru
 reversible design decisions, log every stake + tripwire outcome, and audit whether credit tracks
 being-right **before** widening the lane.
 
+**v1 implementation contract** (gap review by the opus-4.8 + gpt-5.6-sol panel, 2026-07-13 — what bites
+DURING implementation; crystal in `m8-design`). v1 slices: engine with ALL crystals provisional (no
+anchor pool exists yet) · reopen by user-flag only · staking not built. Three contracts before code:
+1. **Schema first — it is the enforcement point, not just a shape.** Every stage reads/writes the
+   crystal; pin it before engine code: `verdict` enum with safe default **`NOT_ANSWERED`** (machine-
+   branchable), explicit attack/concession/margin fields, typed provenance edges (`supersedes`,
+   `grounded_in`). A claim with no scar must be *representable only as* NOT_ANSWERED.
+2. **The debate is a fault-tolerant state machine, not a happy path.** Per-stage timeouts; any dead/
+   garbage challenger, defender, or judge lands the crystal in a terminal **`INCONCLUSIVE`** state
+   (→ provisional) — never "survived a challenge it never received". Derangement (author ≠ challenger
+   ≠ judge) is a **checkable precondition asserted at debate start**; an unsatisfiable pool aborts to
+   inconclusive, never silently relaxes the invariant.
+3. **Synthesis is provenance-constrained — structurally, not advisorily.** The synthesizer reads only
+   from the schema and **hard-rejects** any claim whose verdict is NOT_ANSWERED / whose scar is
+   incomplete (invariant with a test, not a warning) — an unchallenged claim can never be laundered
+   into the brain looking settled. Every provisional write is logged so the user-flag-only reopen
+   backlog stays visible.
+
 **Two modes — this is where the forum idea lives (scoped to where it helps):**
 - **`converge`** (default): the dialectic above → the best *defensible* answer. For decisions / design / bug-hunts.
 - **`diverge`**: forum-style cross-talk, **no judge, no winner** → a ranked idea list. For naming / product-direction / ideation, where cross-pollination genuinely spawns hybrids.
