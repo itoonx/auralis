@@ -10,9 +10,8 @@ import { execSync } from "node:child_process";
 import { basename, join } from "node:path";
 import { tmpdir, homedir } from "node:os";
 
-let raw = "";
 let d = {};
-try { raw = readFileSync(0, "utf8"); d = JSON.parse(raw); } catch { /* no stdin — render what we can */ }
+try { d = JSON.parse(readFileSync(0, "utf8")); } catch { /* no stdin — render what we can */ }
 
 const sid = d.session_id ?? "unknown";
 const cwd = d.workspace?.current_dir ?? d.cwd ?? process.cwd();
@@ -79,16 +78,4 @@ const cost = d.cost?.total_cost_usd;
 if (typeof cost === "number" && cost > 0) parts.push(`$${cost.toFixed(2)}`);
 const la = d.cost?.total_lines_added ?? 0, lr = d.cost?.total_lines_removed ?? 0;
 if (la + lr > 0) parts.push(`+${la}/-${lr}`);
-
-// Chain the cognee statusline (the previous statusLine command) so replacing it in settings loses nothing.
-// Versioned plugin path — existsSync-guarded so a plugin update degrades to "no cognee segment", never an error.
-try {
-  const cognee = join(homedir(), ".claude/plugins/cache/cognee/cognee-memory/0.2.0/scripts/cognee-statusline.sh");
-  if (existsSync(cognee)) {
-    const out = execSync(`bash ${JSON.stringify(cognee)}`, { input: raw, timeout: 500, stdio: ["pipe", "pipe", "ignore"] })
-      .toString().split("\n")[0].trim();
-    if (out) parts.push(out);
-  }
-} catch { /* cognee segment is optional */ }
-
 console.log(parts.join(`${DIM} · ${RESET}`));
