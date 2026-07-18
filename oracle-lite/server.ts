@@ -674,11 +674,14 @@ const server = Bun.serve({
     }
 
     // Replay a run's timeline in order. run omitted => the newest run for the project (or newest overall).
+    // all=1 (no run) => the continuous feed: the newest `limit` events across ALL runs, still ascending —
+    // a new session APPENDS to the stream instead of resetting the view (per-run history stays in /api/runs).
     if (req.method === "GET" && url.pathname === "/api/timeline") {
       let run = url.searchParams.get("run");
       const project = url.searchParams.get("project");
+      const all = !run && url.searchParams.get("all") === "1";
       const limit = Math.max(1, Math.min(2000, Number(url.searchParams.get("limit") ?? 500)));
-      if (!run) {
+      if (!run && !all) {
         const latest = db.query(
           project ? "SELECT run_id FROM events WHERE project = ? ORDER BY seq DESC LIMIT 1" : "SELECT run_id FROM events ORDER BY seq DESC LIMIT 1",
         ).get(...(project ? [project] : [])) as any;
@@ -690,9 +693,11 @@ const server = Bun.serve({
       if (project) { cond.push("project = ?"); params.push(project); }
       let sql = "SELECT seq, run_id, project, kind, actor, human, node_id, parent_node, refs, ts FROM events";
       if (cond.length) sql += " WHERE " + cond.join(" AND ");
-      sql += " ORDER BY seq LIMIT ?";
+      // all-mode wants the NEWEST window (DESC + reverse) — plain ASC LIMIT would serve the oldest events.
+      sql += all ? " ORDER BY seq DESC LIMIT ?" : " ORDER BY seq LIMIT ?";
       params.push(limit);
       const rows = db.query(sql).all(...params) as any[];
+      if (all) rows.reverse();
       const events = rows.map((r) => ({
         seq: r.seq, runId: r.run_id, project: r.project, kind: r.kind, actor: r.actor, human: r.human,
         nodeId: r.node_id ?? undefined,
@@ -700,7 +705,7 @@ const server = Bun.serve({
         refs: r.refs ? JSON.parse(r.refs) : undefined,
         ts: r.ts,
       }));
-      return Response.json({ run, events });
+      return Response.json({ run: all ? "all" : run, events });
     }
 
     // All runs for a project (newest first) with a per-run scorecard — the run history / compare view.

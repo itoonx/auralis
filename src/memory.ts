@@ -64,7 +64,7 @@ export interface MemoryAdapter {
   cite?(id: string): Promise<void>;
   // Activity timeline (append-only): record one narrated event; replay a run's events in order.
   recordEvent?(e: TimelineEvent): Promise<void>;
-  timeline?(opts?: { run?: string; project?: string; limit?: number }): Promise<TimelineEvent[]>;
+  timeline?(opts?: { run?: string; project?: string; limit?: number; all?: boolean }): Promise<TimelineEvent[]>;
 }
 
 export class NullMemoryAdapter implements MemoryAdapter {
@@ -283,9 +283,10 @@ export class OracleAdapter implements MemoryAdapter {
     if (!res.ok) throw new Error(`oracle event ${res.status}`);
   }
 
-  async timeline(opts: { run?: string; project?: string; limit?: number } = {}): Promise<TimelineEvent[]> {
+  async timeline(opts: { run?: string; project?: string; limit?: number; all?: boolean } = {}): Promise<TimelineEvent[]> {
     const u = new URL("/api/timeline", this.baseUrl);
     if (opts.run) u.searchParams.set("run", opts.run);
+    else if (opts.all) u.searchParams.set("all", "1"); // continuous feed across runs (newest window)
     if (opts.project) u.searchParams.set("project", opts.project);
     if (opts.limit) u.searchParams.set("limit", String(opts.limit));
     const res = await fetch(u, { headers: AUTH, signal: AbortSignal.timeout(10_000) });

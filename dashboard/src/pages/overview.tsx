@@ -1,7 +1,7 @@
 // Overview: the "what is happening" page — stat strip, live activity feed, and the findings column.
 // The feed and findings scroll independently; every panel surfaces its own fetch error while keeping the
 // last good data on screen (a blip must not blank the page).
-import { useState, type ReactNode } from "react"
+import { Fragment, useState, type ReactNode } from "react"
 import { ChevronDown, ChevronUp, Pin } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
@@ -42,9 +42,17 @@ export function OverviewPage({ project, tick, tl, stats, docs, error, updatedAtM
   const [showTraces, setShowTraces] = useState(false)
   const events = tl?.events ?? []
   const runId = tl?.run ?? ""
+  // run: "all" = the continuous cross-session stream (the default) — the feed then labels each session
+  // boundary instead of the header naming one runId.
+  const continuous = runId === "all"
 
   const rn = usePoll(project ? (s) => getRuns(project, s) : null, [project, tick])
   const runs = rn.data?.runs ?? []
+  // Section label for a run boundary: the run's human title (its first prompt) when known, else the id.
+  const runLabel = (id?: string) => {
+    const t = (runs.find((r) => r.runId === id)?.title ?? "").replace(/^\S{1,2}\s+/, "").trim()
+    return t || (id ?? "run")
+  }
 
   const sc = scorecard(events)
   const nPrompts = events.filter((e) => e.kind === "prompt").length
@@ -105,8 +113,14 @@ export function OverviewPage({ project, tick, tl, stats, docs, error, updatedAtM
               </div>
             </div>
             <div className="flex min-w-0 items-center gap-2 font-mono text-xs text-muted-foreground">
-              <span className="truncate">{runId || "—"}</span>
-              {runId && <CopyButton text={runId} label="copy run id" />}
+              {continuous ? (
+                <span className="truncate" title="every session lands in this one stream — closing a session never resets it">all sessions · one continuous stream</span>
+              ) : (
+                <>
+                  <span className="truncate">{runId || "—"}</span>
+                  {runId && <CopyButton text={runId} label="copy run id" />}
+                </>
+              )}
               {capped && <span title="the timeline endpoint returns at most 500 events — counts describe this window">· latest 500</span>}
             </div>
           </CardHeader>
@@ -118,7 +132,7 @@ export function OverviewPage({ project, tick, tl, stats, docs, error, updatedAtM
                 showing run <span className="font-mono">{runSel}</span>
               </span>
               <button type="button" className="shrink-0 text-primary underline-offset-2 hover:underline" onClick={onClearRun}>
-                back to latest
+                back to the stream
               </button>
             </div>
           )}
@@ -132,8 +146,15 @@ export function OverviewPage({ project, tick, tl, stats, docs, error, updatedAtM
                     no events yet — run <code className="font-mono">pnpm dev</code> against a repo, then watch them land here.
                   </li>
                 )}
-                {visible.map((e) => (
-                  <li key={e.seq} className="flex items-start gap-3 px-4 py-2.5 hover:bg-muted/30">
+                {visible.map((e, i) => (
+                  <Fragment key={e.seq}>
+                  {/* Session boundary in the continuous stream (feed is newest-first, so it marks the run below). */}
+                  {continuous && (i === 0 || visible[i - 1].runId !== e.runId) && (
+                    <li className="bg-muted/30 px-4 py-1 font-mono text-[10px] text-muted-foreground" title={e.runId}>
+                      <span className="line-clamp-1">{runLabel(e.runId)}</span>
+                    </li>
+                  )}
+                  <li className="flex items-start gap-3 px-4 py-2.5 hover:bg-muted/30">
                     <span className="pt-0.5 font-mono text-xs text-muted-foreground tabular-nums" title={e.ts}>{clock(e.ts)}</span>
                     <KindChip kind={e.kind} />
                     <div className="min-w-0 flex-1">
@@ -152,6 +173,7 @@ export function OverviewPage({ project, tick, tl, stats, docs, error, updatedAtM
                       )}
                     </div>
                   </li>
+                  </Fragment>
                 ))}
               </ol>
             </ScrollArea>

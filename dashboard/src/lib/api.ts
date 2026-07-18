@@ -69,6 +69,10 @@ export const getProjects = (signal?: AbortSignal) => json<{ projects: ProjectInf
 export const getTimeline = (project: string, run?: string, signal?: AbortSignal) => {
   const u = new URLSearchParams({ project, limit: "500" });
   if (run) u.set("run", run);
+  // No run selected => the CONTINUOUS feed (newest 500 across all sessions, run: "all") — a new session
+  // appends to the stream instead of resetting the view. An older server ignores the flag and falls back
+  // to latest-run, which the UI renders exactly as before.
+  else u.set("all", "1");
   return json<{ run: string; events: TimelineEvent[] }>(`/api/timeline?${u}`, signal);
 };
 

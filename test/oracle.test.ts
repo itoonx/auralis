@@ -102,4 +102,18 @@ describe("Oracle read-after-write (needs sidecar at :47778)", () => {
     expect(events[1].refs).toEqual(["x"]);
     expect(scorecard(events)).toMatchObject({ tasks: 2, deduped: 1 });
   }, 60_000);
+
+  it("timeline all=1 is one continuous feed across runs — a new session appends, never resets", async () => {
+    if (!(await oracleReachable())) {
+      console.warn("Oracle not reachable at :47778 — skipping live timeline test.");
+      return;
+    }
+    const oracle = new OracleAdapter();
+    const project = "tl-" + Math.random().toString(36).slice(2, 8);
+    await oracle.recordEvent!({ runId: "session:one", project, kind: "prompt", actor: "human", human: "🗣 first session" });
+    await oracle.recordEvent!({ runId: "session:two", project, kind: "prompt", actor: "human", human: "🗣 second session" });
+    // Both sessions in ONE stream, oldest→newest — the run-scoped default would show only session:two.
+    const events = await oracle.timeline!({ project, all: true });
+    expect(events.map((e) => e.runId)).toEqual(["session:one", "session:two"]);
+  }, 60_000);
 });
