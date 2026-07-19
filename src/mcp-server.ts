@@ -15,6 +15,8 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { spawn } from "node:child_process";
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { OracleAdapter } from "./memory";
 import { ensureOracle, resolveTasks, runFleet, stepSink } from "./fleet";
@@ -120,6 +122,43 @@ server.tool(
     } finally {
       stopHb();
       stop();
+    }
+  },
+);
+
+// Brainstorm is cwd-INDEPENDENT (topic in, decision brief out, learned to the brain) — so exposing it as a
+// tool makes it usable from ANY project once this server is registered at user scope. We shell out to the
+// battle-tested CLI (src/run-brainstorm.ts) rather than re-wire its main(): the CLI already splits stdout
+// (the synthesis) from stderr (live progress), which is exactly the shape a tool needs. Runs in the auralis
+// repo dir so pnpm/tsx and .env/.env.oracle resolve no matter which project the caller is in.
+const AURALIS_ROOT = fileURLToPath(new URL("..", import.meta.url));
+server.tool(
+  "brainstorm",
+  "Run a multi-model panel brainstorm on a topic or design question: models propose independently, then critique and revise across rounds until the votes stabilize, and a synthesizer writes a decision brief that is LEARNED into the shared brain (recallable by every future session and fleet worker). Works from any project. Takes minutes and bills the configured paid providers.",
+  {
+    topic: z.string().describe("the topic or design question to brainstorm, e.g. 'should we cache at the edge or the origin?'"),
+    mode: z.enum(["panel", "converge"]).optional().describe("panel (default) = simultaneous propose+converge; converge = adversarial dialectic (propose→challenge→defend→judge→synthesize), learned PROVISIONAL with its scar record"),
+  },
+  async ({ topic, mode }, extra) => {
+    const { onProgress, stop: stopHb } = startProgress(extra);
+    const env = { ...process.env };
+    if (mode) env.AURALIS_BRAINSTORM_MODE = mode;
+    try {
+      const synthesis = await new Promise<string>((res, rej) => {
+        const child = spawn("pnpm", ["-C", AURALIS_ROOT, "brainstorm", topic], { env });
+        let out = "", errTail = "";
+        child.stdout.on("data", (b) => { out += b.toString(); });
+        child.stderr.on("data", (b) => {
+          const s = b.toString();
+          errTail = (errTail + s).slice(-2000); // keep the tail for a useful error if it exits non-zero
+          for (const line of s.split("\n")) if (line.trim()) onProgress?.(line.trim());
+        });
+        child.on("error", rej);
+        child.on("close", (code) => (code === 0 ? res(out.trim()) : rej(new Error(`brainstorm exited ${code}: ${errTail.slice(-500)}`))));
+      });
+      return { content: [{ type: "text", text: synthesis || "(brainstorm produced no synthesis — check provider keys/credits)" }] };
+    } finally {
+      stopHb();
     }
   },
 );
